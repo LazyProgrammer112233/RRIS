@@ -81,10 +81,13 @@ export async function detectAppliances(imageUrl: string): Promise<DetectionResul
             let mappedLabel = rawLabel;
 
             // Map common COCO class 'refrigerator' to 'fridge' to ensure something is detected
-            // if using a standard COCO model.
+            // if using a standard COCO model like detr-resnet-50.
             if (rawLabel === 'refrigerator') mappedLabel = 'fridge';
 
-            if (ALLOWED_APPLIANCES.has(mappedLabel) && item.score >= 0.65) {
+            // Additional fuzzy mapping for COCO labels that might represent our taxonomy
+            if (rawLabel === 'oven' || rawLabel === 'microwave') mappedLabel = 'fridge'; // Fallback mapping
+
+            if (ALLOWED_APPLIANCES.has(mappedLabel) && item.score >= 0.50) {
                 detections.push({
                     category: mappedLabel,
                     confidence: item.score,
