@@ -1,24 +1,31 @@
 export async function extractPlaceId(mapsUrl: string): Promise<string | null> {
-  // Try to match standard pb=!1s{place_id} format
-  let match = mapsUrl.match(/!1s([^!&?]+)/);
-  if (match) return match[1];
+  // If we already have a ChIJ place_id in the URL
+  let chMatch = mapsUrl.match(/place_id=(ChI[a-zA-Z0-9_\-]+)/);
+  if (chMatch) return chMatch[1];
 
-  // Try to match CID format or search parameters directly
-  // Real implementation needs to call Places API Find Place if place_id isn't directly observable
-  const url = new URL(mapsUrl);
-  
-  if (url.searchParams.has('query')) {
-    return await findPlaceFromQuery(url.searchParams.get('query')!);
-  }
-  
-  // If it's a short URL (goo.gl/maps), we would need to resolve it first
+  let currentUrl = mapsUrl;
+
+  // Resolve short URL to its canonical form
   if (mapsUrl.includes('goo.gl/maps') || mapsUrl.includes('maps.app.goo.gl')) {
     try {
       const response = await fetch(mapsUrl, { redirect: 'follow' });
-      return await extractPlaceId(response.url);
+      currentUrl = response.url;
     } catch (e) {
       console.error("Failed to resolve short URL", e);
     }
+  }
+
+  // Use the canonical canonical url to parse the location's Name
+  const nameMatch = currentUrl.match(/\/place\/([^\/]+)\//);
+  if (nameMatch) {
+    const extractedName = decodeURIComponent(nameMatch[1]).replace(/\+/g, ' ');
+    return await findPlaceFromQuery(extractedName);
+  }
+
+  // Fallback to URL query parameter if available
+  const urlParams = new URL(currentUrl);
+  if (urlParams.searchParams.has('query')) {
+    return await findPlaceFromQuery(urlParams.searchParams.get('query')!);
   }
 
   return null;
@@ -27,7 +34,7 @@ export async function extractPlaceId(mapsUrl: string): Promise<string | null> {
 async function findPlaceFromQuery(query: string): Promise<string | null> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   const baseUrl = 'https://maps.googleapis.com/maps/api/place/findplacefromtext/json';
-  
+
   const params = new URLSearchParams({
     input: query,
     inputtype: 'textquery',
@@ -47,7 +54,7 @@ async function findPlaceFromQuery(query: string): Promise<string | null> {
 export async function getPlaceDetails(placeId: string) {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   const baseUrl = 'https://maps.googleapis.com/maps/api/place/details/json';
-  
+
   const params = new URLSearchParams({
     place_id: placeId,
     fields: 'name,formatted_address,photos',
@@ -69,7 +76,7 @@ export function buildPhotoUrls(photos: any[], maxImages: number = 15): string[] 
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   const baseUrl = 'https://maps.googleapis.com/maps/api/place/photo';
-  
+
   // Take up to maxImages
   const selectedPhotos = photos.slice(0, maxImages);
 
