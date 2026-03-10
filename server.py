@@ -29,7 +29,12 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    """Enhanced Deployment sanity check"""
+    """Minimal health check for fast Railway response"""
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+
+@app.get("/status/deep")
+async def deep_health_check():
+    """Detailed sanity check for browser and env"""
     health = {
         "status": "ready",
         "browser": "unverified",
@@ -39,23 +44,17 @@ async def health_check():
             "PLACES_KEY": "set" if os.getenv("GOOGLE_PLACES_API_KEY") else "missing"
         }
     }
-    
     try:
-        # Check if playwright is actually usable
         import subprocess
-        # Simply check if the binary exists in the expected playwright path
-        # The official image stores them in /ms-playwright
         res = subprocess.run(["ls", "-R", "/ms-playwright/chromium*"], capture_output=True, text=True)
         if "chrome" in res.stdout.lower() or res.returncode == 0:
             health["browser"] = "installed"
         else:
-            # Fallback check
             check = subprocess.run(["playwright", "--version"], capture_output=True, text=True)
             health["browser"] = f"verified ({check.stdout.strip()})"
     except Exception as e:
         health["browser_error"] = str(e)
         health["status"] = "partial_ready"
-
     return health
 
 DB_PATH = "/app/data/rris_tasks.db"
@@ -171,4 +170,6 @@ async def sync_sheets():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    print(f"📡 Starting server on 0.0.0.0:{port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)

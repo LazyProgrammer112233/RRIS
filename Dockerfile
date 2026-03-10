@@ -25,5 +25,5 @@ COPY . .
 EXPOSE 8000
 
 # Run the server using python -m uvicorn for path reliability
-# Explicitly bind to 0.0.0.0 for Railway routing
-CMD ["python3", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Uses sh -c to expand the $PORT environment variable
+CMD sh -c "python3 -m uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}"
