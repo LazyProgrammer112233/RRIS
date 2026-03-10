@@ -53,9 +53,11 @@ async def health_check():
 
     return health
 
-DB_PATH = "rris_tasks.db"
+DB_PATH = "/app/data/rris_tasks.db"
 
 def init_db():
+    # Ensure data directory exists
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
