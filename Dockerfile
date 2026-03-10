@@ -1,13 +1,17 @@
-# Use official Playwright image for Python
+# Use official Playwright image for Python (Pre-installed browsers)
 FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 
 # Set working directory
 WORKDIR /app
 
+# Optimization: Set Environment Variables
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV PYTHONUNBUFFERED=1
+
 # Ensure we have the latest pip
 RUN python3 -m pip install --upgrade pip
 
-# Copy requirements and install dependencies
+# Layer Caching: Copy requirements and install first
 COPY requirements.txt .
 RUN python3 -m pip install --no-cache-dir -r requirements.txt
 
@@ -17,11 +21,9 @@ RUN python3 -m uvicorn --version
 # Copy application code
 COPY . .
 
-# Install Chromium
-RUN playwright install chromium
-
 # Expose FastAPI port
 EXPOSE 8000
 
 # Run the server using python -m uvicorn for path reliability
+# Explicitly bind to 0.0.0.0 for Railway routing
 CMD ["python3", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
