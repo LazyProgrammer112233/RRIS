@@ -5,21 +5,34 @@ export async function extractPlaceId(mapsUrl: string): Promise<string | null> {
 
   let currentUrl = mapsUrl;
 
-  // 2. Resolve short URL to its canonical form
-  if (mapsUrl.includes('goo.gl/maps') || mapsUrl.includes('maps.app.goo.gl')) {
+  // 2. Resolve short URL to its canonical form securely
+  if (mapsUrl.includes('goo.gl') || mapsUrl.includes('maps.app.goo.gl')) {
     try {
       const response = await fetch(mapsUrl, {
-        redirect: 'follow',
-        headers: { 'User-Agent': 'Mozilla/5.0' } // Sometimes required by Google
+        redirect: 'manual', // intercept the redirect manually
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+          'Accept-Language': 'en-US,en;q=0.9'
+        }
       });
-      currentUrl = response.url;
+      // The location header contains the expanded canonical URL
+      const location = response.headers.get('location');
+      if (location) {
+        currentUrl = location;
+      } else {
+        // If no location header, the response url might still be expanded if fetch followed it anyway
+        currentUrl = response.url || mapsUrl;
+      }
     } catch (e) {
-      console.error("Failed to resolve short URL", e);
+      console.error("[RRIS] Failed to resolve short URL manually", e);
     }
   }
 
+  // Check again if the resolved URL now has the explicit place_id
+  chMatch = currentUrl.match(/place_id=(ChI[a-zA-Z0-9_\-]+)/);
+  if (chMatch) return chMatch[1];
+
   // 3. Try to extract Name AND Coordinates from the canonical URL
-  // Matches: .../place/Name+Here/@lat,lng,zoom...
   const nameMatch = currentUrl.match(/\/place\/([^\/]+)\//);
   const coordMatch = currentUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
 
@@ -29,15 +42,29 @@ export async function extractPlaceId(mapsUrl: string): Promise<string | null> {
 
     if (coordMatch) {
       location = { lat: coordMatch[1], lng: coordMatch[2] };
+      console.log(`[RRIS] Parsed location: ${location.lat}, ${location.lng}`);
     }
 
     return await findPlaceByText(extractedName, location);
   }
 
-  // Fallback to URL query parameter if available
-  const urlParams = new URL(currentUrl);
-  if (urlParams.searchParams.has('query')) {
-    return await findPlaceByText(urlParams.searchParams.get('query')!);
+  // Fallback 1: Query parameter search (?query=store+name)
+  let urlParams;
+  try {
+    urlParams = new URL(currentUrl);
+  } catch (e) { /* Ignore invalid URLs at this stage */ }
+
+  if (urlParams && urlParams.searchParams.has('query')) {
+    const query = urlParams.searchParams.get('query')!;
+    // Simple coordinate extraction from query if it looks like lat,lng
+    const qCoord = query.match(/(-?\d+\.\d+),(-?\d+\.\d+)/);
+    let placeId = null;
+    if (qCoord) {
+      placeId = await findPlaceByText("Retail Store", { lat: qCoord[1], lng: qCoord[2] });
+    } else {
+      placeId = await findPlaceByText(query);
+    }
+    return placeId ? placeId.replace(/[^a-zA-Z0-9_\-]/g, '') : null;
   }
 
   return null;
@@ -46,7 +73,7 @@ export async function extractPlaceId(mapsUrl: string): Promise<string | null> {
 async function findPlaceByText(query: string, location?: { lat: string; lng: string }): Promise<string | null> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
 
-  // Use Text Search API which is better for "name + location" than Find Place From Text
+  // Use Text Search API
   const baseUrl = 'https://maps.googleapis.com/maps/api/place/textsearch/json';
 
   const params: any = {
@@ -54,22 +81,20 @@ async function findPlaceByText(query: string, location?: { lat: string; lng: str
     key: apiKey || ''
   };
 
-  // If location is provided, use it as a bias with a tight radius
   if (location) {
     params.location = `${location.lat},${location.lng}`;
-    params.radius = '100'; // 100 meters - very strict for the specific listing
+    params.radius = '100';
   }
 
   const response = await fetch(`${baseUrl}?${new URLSearchParams(params).toString()}`);
   const data = await response.json();
 
   if (data.status === 'OK' && data.results && data.results.length > 0) {
-    // If multiple results, prioritize the one with the exact name match if possible
-    // but usually the 100m radius + query will return the correct one first.
-    return data.results[0].place_id;
+    // Sanitize returned Place ID
+    return data.results[0].place_id.replace(/[^a-zA-Z0-9_\-]/g, '');
   }
 
-  // Fallback for Find Place if Text Search failed (broad search)
+  // Fallback for Find Place if Text Search failed
   if (data.status === 'ZERO_RESULTS' && location) {
     const fallbackUrl = 'https://maps.googleapis.com/maps/api/place/findplacefromtext/json';
     const fallbackParams = new URLSearchParams({
@@ -81,7 +106,7 @@ async function findPlaceByText(query: string, location?: { lat: string; lng: str
     const fbResponse = await fetch(`${fallbackUrl}?${fallbackParams.toString()}`);
     const fbData = await fbResponse.json();
     if (fbData.status === 'OK' && fbData.candidates?.length > 0) {
-      return fbData.candidates[0].place_id;
+      return fbData.candidates[0].place_id.replace(/[^a-zA-Z0-9_\-]/g, '');
     }
   }
 
@@ -114,12 +139,11 @@ export function buildPhotoUrls(photos: any[], maxImages: number = 15): string[] 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   const baseUrl = 'https://maps.googleapis.com/maps/api/place/photo';
 
-  // Take up to maxImages
   const selectedPhotos = photos.slice(0, maxImages);
 
   return selectedPhotos.map(photo => {
     const params = new URLSearchParams({
-      maxwidth: '1024', // Requirement: Resize images before inference to max 1024px
+      maxwidth: '1024',
       photo_reference: photo.photo_reference,
       key: apiKey || ''
     });
