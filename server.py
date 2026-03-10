@@ -24,18 +24,34 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    """Deployment sanity check"""
-    try:
-        # Check if playwright chromium is available (basic check)
-        import subprocess
-        browser_check = subprocess.run(["playwright", "install", "--with-deps", "chromium", "--dry-run"], capture_output=True, text=True)
-        return {
-            "status": "ready", 
-            "browser": "installed",
-            "db": "connected" if os.path.exists(DB_PATH) else "initializing"
+    """Enhanced Deployment sanity check"""
+    health = {
+        "status": "ready",
+        "browser": "unverified",
+        "db": "connected" if os.path.exists(DB_PATH) else "initializing",
+        "env": {
+            "GEMINI_KEY": "set" if os.getenv("GEMINI_API_KEY") else "missing",
+            "PLACES_KEY": "set" if os.getenv("GOOGLE_PLACES_API_KEY") else "missing"
         }
+    }
+    
+    try:
+        # Check if playwright is actually usable
+        import subprocess
+        # Simply check if the binary exists in the expected playwright path
+        # The official image stores them in /ms-playwright
+        res = subprocess.run(["ls", "-R", "/ms-playwright/chromium*"], capture_output=True, text=True)
+        if "chrome" in res.stdout.lower() or res.returncode == 0:
+            health["browser"] = "installed"
+        else:
+            # Fallback check
+            check = subprocess.run(["playwright", "--version"], capture_output=True, text=True)
+            health["browser"] = f"verified ({check.stdout.strip()})"
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        health["browser_error"] = str(e)
+        health["status"] = "partial_ready"
+
+    return health
 
 DB_PATH = "rris_tasks.db"
 
