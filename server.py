@@ -3,6 +3,7 @@ import uuid
 import asyncio
 import sqlite3
 import json
+import sys
 from datetime import datetime
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,10 @@ from main import run_audit
 from google_sheets import export_to_sheets
 
 app = FastAPI(title="RRIS Audit API")
+
+print("🔥 RRIS Engine Initializing...")
+print(f"📂 Current Working Directory: {os.getcwd()}")
+print(f"📦 Python Version: {sys.version}")
 
 app.add_middleware(
     CORSMiddleware,
