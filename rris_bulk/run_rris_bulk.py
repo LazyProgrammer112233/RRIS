@@ -116,14 +116,21 @@ async def main():
 
     # Step 1: Authentication
     print_step(1, "Authenticating Gemini AI...")
-    load_dotenv()
+    
+    # Use absolute path for .env relative to script
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    load_dotenv(env_path)
+    
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         print(f"{Fore.MAGENTA}No API Key found in .env{Style.RESET_ALL}")
         api_key = input("  > Enter your Gemini API Key: ").strip()
-        with open(".env", "a") as f:
-            f.write(f"\nGEMINI_API_KEY={api_key}\n")
-        print(f"{Fore.GREEN}  [✓] Session Authenticated.{Style.RESET_ALL}")
+        try:
+            with open(env_path, "a") as f:
+                f.write(f"\nGEMINI_API_KEY={api_key}\n")
+            print(f"{Fore.GREEN}  [✓] Session Authenticated and key saved to .env{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.YELLOW}  [!] Key authenticated for this session, but could not save to .env: {e}{Style.RESET_ALL}")
     else:
         print(f"{Fore.GREEN}  [✓] System Authenticated via .env{Style.RESET_ALL}")
 
