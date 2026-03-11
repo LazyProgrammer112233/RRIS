@@ -1,9 +1,12 @@
 import { Toaster } from 'react-hot-toast';
 import './globals.css';
+import { Outfit } from 'next/font/google';
+
+const outfit = Outfit({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Retail Refrigeration Intelligence',
-  description: 'Analyze retail stores for refrigeration appliances using Google Maps.',
+  title: 'RRIS | Retail AI Intelligence',
+  description: 'Advanced retail refrigeration audit powered by Gemini Vision CoV.',
 };
 
 export default function RootLayout({
@@ -12,20 +15,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="bg-gray-50 min-h-screen">
-        <Toaster position="top-right" />
-        <main className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight sm:text-5xl">
-              Retail Refrigeration <span className="text-blue-600">Intelligence</span>
-            </h1>
-            <p className="mt-4 max-w-2xl mx-auto text-xl text-gray-500">
-              Analyze store imagery for cooling appliances directly from Google Maps links.
-            </p>
-          </div>
-          {children}
-        </main>
+    <html lang="en" className="dark">
+      <head>
+        <style>{`
+          body {
+            background: #0a0510;
+          }
+        `}</style>
+      </head>
+      <body className={`${outfit.className} min-h-screen mesh-gradient selection:bg-purple-500/30 overflow-x-hidden`}>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: 'rgba(20, 10, 35, 0.8)',
+              color: '#fff',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '16px',
+            }
+          }}
+        />
+        {children}
       </body>
     </html>
   );

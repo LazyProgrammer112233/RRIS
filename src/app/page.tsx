@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Loader2, ArrowRight, Table, CheckCircle, Info, Database } from 'lucide-react';
+import { Search, Loader2, ArrowRight, Table, CheckCircle, Info, Database, Sparkles, Cpu, Layers } from 'lucide-react';
 import AuditDisplay from '@/components/AuditDisplay';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 export default function RRISDashboard() {
   const [mapsUrl, setMapsUrl] = useState('');
@@ -12,12 +12,16 @@ export default function RRISDashboard() {
   const [status, setStatus] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [statusFeed, setStatusFeed] = useState<string[]>([]);
 
-  // Get API URL and Secret from env
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7860';
   const APP_SECRET = process.env.NEXT_PUBLIC_APP_SECRET || '';
 
-  // Poll for status if we have a taskId
+  // Add to status feed helper
+  const addStatus = (msg: string) => {
+    setStatusFeed(prev => [msg, ...prev].slice(0, 5));
+  };
+
   useEffect(() => {
     let interval: any;
     if (taskId && (status === 'PENDING' || status === 'RUNNING')) {
@@ -27,14 +31,19 @@ export default function RRISDashboard() {
             headers: { 'X-RRIS-SECRET': APP_SECRET },
           });
           const data = await res.json();
-          setStatus(data.status);
+
+          if (data.status !== status) {
+            setStatus(data.status);
+            addStatus(`System: ${data.status}`);
+          }
+
           if (data.status === 'COMPLETED') {
             setResult(data.result);
             setIsLoading(false);
-            toast.success('Audit Complete!');
+            toast.success('Audit Intelligence Synchronized');
           } else if (data.status === 'FAILED') {
             setIsLoading(false);
-            toast.error('Audit Failed.');
+            toast.error('Intelligence Retrieval Failed');
           }
         } catch (err) {
           console.error("Polling error:", err);
@@ -51,31 +60,27 @@ export default function RRISDashboard() {
     setIsLoading(true);
     setResult(null);
     setStatus('PENDING');
+    setStatusFeed(['Initializing RRIS Engine...']);
 
     try {
-      // 1. Resolve short URL locally via Vercel Edge Function first
-      // This bypasses Hugging Face IP blocks for goo.gl links
+      addStatus('Resolving Endpoint...');
       let finalUrl = mapsUrl;
       if (mapsUrl.includes("maps.app.goo.gl") || mapsUrl.includes("goo.gl")) {
-        try {
-          const resolveRes = await fetch('/api/resolve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ maps_url: mapsUrl })
-          });
-          if (resolveRes.ok) {
-            const resolveData = await resolveRes.json();
-            if (resolveData.resolved_url) {
-              finalUrl = resolveData.resolved_url;
-              console.log("Resolved short URL to:", finalUrl);
-            }
+        const resolveRes = await fetch('/api/resolve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ maps_url: mapsUrl })
+        });
+        if (resolveRes.ok) {
+          const resolveData = await resolveRes.json();
+          if (resolveData.resolved_url) {
+            finalUrl = resolveData.resolved_url;
+            addStatus('Endpoint Resolved Successfully');
           }
-        } catch (resolveErr) {
-          console.error("Short URL resolution failed:", resolveErr);
         }
       }
 
-      // 2. Send the canonical resolved URL to the HF Backend
+      addStatus('Injecting Vision CoV Protocol...');
       const res = await fetch(`${API_URL}/audit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-RRIS-SECRET': APP_SECRET },
@@ -83,98 +88,117 @@ export default function RRISDashboard() {
       });
       const data = await res.json();
       setTaskId(data.task_id);
-      toast.success('Audit Task Started');
+      addStatus('Vision Process Dispatched');
     } catch (err) {
       setIsLoading(false);
-      toast.error('Failed to connect to backend.');
+      toast.error('Connection Lost');
     }
   };
 
-  const handleSyncToSheets = async () => {
-    toast.promise(
-      fetch(`${API_URL}/sync-sheets`, { method: 'POST', headers: { 'X-RRIS-SECRET': APP_SECRET } }),
-      {
-        loading: 'Syncing to Google Sheets...',
-        success: 'Successfully Synced!',
-        error: 'Sync Failed.',
-      }
-    );
-  };
-
   return (
-    <main className="min-h-screen bg-[#0a0a0b] text-white selection:bg-cyan-500/30">
-      <Toaster position="top-right" />
+    <main className="min-h-screen">
+      {/* Background Glows */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-600/10 blur-[120px] rounded-full" />
+      </div>
 
-      {/* Search Header */}
-      <div className={`transition-all duration-1000 flex flex-col items-center justify-center p-8 ${result ? 'pt-12 pb-8' : 'h-screen'}`}>
+      <div className={`transition-all duration-1000 flex flex-col items-center justify-center p-6 ${result ? 'pt-20 pb-10' : 'h-screen'}`}>
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-2xl text-center"
+          layout
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-3xl"
         >
+          {/* Logo & Header */}
           {!result && (
-            <div className="mb-10 space-y-4">
-              <motion.div
-                initial={{ scale: 0.8 }}
-                animate={{ scale: 1 }}
-                className="w-16 h-16 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-3xl mx-auto shadow-2xl shadow-cyan-500/20 flex items-center justify-center mb-6"
-              >
-                <Database className="text-white" size={32} />
-              </motion.div>
-              <h1 className="text-5xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-white/40">
-                RRIS ENGINE
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center mb-12 space-y-6"
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card text-[10px] font-bold tracking-[0.3em] text-purple-400 uppercase">
+                <Sparkles size={12} />
+                AI-Powered Audit
+              </div>
+              <h1 className="text-7xl font-black tracking-tighter text-white">
+                RR<span className="text-purple-500">IS</span>
               </h1>
-              <p className="text-white/40 text-sm tracking-widest uppercase font-bold">
-                Retail Refrigeration Intelligence System
+              <p className="text-white/40 text-sm font-medium max-w-md mx-auto leading-relaxed">
+                Advanced Refrigeration Intelligence using Gemini Vision
+                & Chain-of-Verification technology.
               </p>
-            </div>
+            </motion.div>
           )}
 
+          {/* Search Box */}
           <form onSubmit={handleStartAudit} className="relative group">
-            <input
-              type="text"
-              placeholder="Paste Google Maps URL..."
-              value={mapsUrl}
-              onChange={(e) => setMapsUrl(e.target.value)}
-              className="w-full h-20 bg-white/[0.03] border border-white/10 rounded-full px-10 pr-32 text-xl font-medium focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.05] transition-all shadow-2xl group-hover:border-white/20"
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !mapsUrl}
-              className="absolute right-3 top-3 bottom-3 px-8 bg-white text-black rounded-full font-bold flex items-center gap-2 hover:bg-cyan-400 transition-colors disabled:opacity-50"
-            >
-              {isLoading ? <Loader2 className="animate-spin" /> : 'Audit'}
-              <ArrowRight size={20} />
-            </button>
+            <div className={`absolute inset-0 bg-purple-600/20 blur-2xl rounded-full transition-opacity duration-500 ${mapsUrl ? 'opacity-100' : 'opacity-0'}`} />
+            <div className="relative glass-card rounded-full p-2 flex items-center purple-glow-sm group-focus-within:purple-glow-lg transition-all border-white/10 group-focus-within:border-purple-500/50">
+              <div className="pl-6 text-white/30 group-focus-within:text-purple-400 transition-colors">
+                <Search size={24} />
+              </div>
+              <input
+                type="text"
+                placeholder="Secure Google Maps URL..."
+                value={mapsUrl}
+                onChange={(e) => setMapsUrl(e.target.value)}
+                className="flex-1 bg-transparent border-none px-6 py-4 text-lg font-medium focus:ring-0 text-white placeholder:text-white/20"
+              />
+              <button
+                type="submit"
+                disabled={isLoading || !mapsUrl}
+                className="h-14 px-10 bg-gradient-to-tr from-purple-600 to-violet-500 text-white rounded-full font-bold flex items-center gap-2 hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] transition-all disabled:opacity-50 active:scale-95"
+              >
+                {isLoading ? <Loader2 className="animate-spin" /> : 'Analyze'}
+                <ArrowRight size={20} />
+              </button>
+            </div>
           </form>
         </motion.div>
       </div>
 
-      {/* Processing State */}
+      {/* Loading Overlay */}
       <AnimatePresence>
         {isLoading && !result && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/80 backdrop-blur-md"
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-2xl"
           >
             <div className="relative">
               <motion.div
                 animate={{ rotate: 360 }}
-                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                className="w-32 h-32 rounded-full border-t-2 border-r-2 border-cyan-500 shadow-[0_0_30px_rgba(6,182,212,0.3)]"
+                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                className="w-48 h-48 rounded-full border-t-2 border-purple-500 shadow-[0_0_50px_rgba(139,92,246,0.2)]"
               />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 className="animate-spin text-cyan-400" size={40} />
+              <div className="absolute inset-0 flex items-center justify-center bg-transparent">
+                <div className="flex flex-col items-center">
+                  <Cpu className="text-purple-500 animate-pulse" size={32} />
+                  <span className="mt-4 text-[10px] font-black tracking-widest text-purple-500/50 uppercase">Active</span>
+                </div>
               </div>
             </div>
-            <p className="mt-10 text-lg font-black tracking-[0.2em] text-white/50 animate-pulse">
-              {status || 'PROCESSING'}...
-            </p>
-            <p className="mt-4 text-[10px] text-white/20 uppercase font-black">
-              Gemini Vision • Playwright Stealth • Logo OCR
-            </p>
+
+            {/* Status Feed */}
+            <div className="mt-16 w-full max-w-sm px-6">
+              <div className="space-y-3">
+                {statusFeed.map((msg, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1 - (idx * 0.2), x: 0 }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className={`w-1.5 h-1.5 rounded-full ${idx === 0 ? 'bg-purple-500 shadow-[0_0_8px_rgba(139,92,246,1)]' : 'bg-white/10'}`} />
+                    <span className={`text-xs font-bold tracking-wide ${idx === 0 ? 'text-white' : 'text-white/30'}`}>
+                      {msg}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -183,34 +207,40 @@ export default function RRISDashboard() {
       <AnimatePresence>
         {result && (
           <motion.section
-            initial={{ opacity: 0, y: 100 }}
+            initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            className="max-w-[1400px] mx-auto px-6 pb-24"
+            className="max-w-[1200px] mx-auto px-6 pb-24"
           >
-            <div className="flex items-center gap-4 mb-10 pb-6 border-b border-white/5">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                <CheckCircle size={24} />
+            <div className="glass-card rounded-[40px] p-10 mb-12 flex flex-col md:flex-row items-center justify-between gap-8 purple-glow-sm">
+              <div className="flex items-center gap-6 text-center md:text-left">
+                <div className="w-16 h-16 rounded-3xl bg-purple-500/10 flex items-center justify-center text-purple-400 border border-purple-500/20">
+                  <Layers size={32} />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-black text-white mb-1">Audit Synchronized</h2>
+                  <p className="text-white/40 text-sm font-medium tracking-tight truncate max-w-[300px]">
+                    {result.store_maps_url}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-2xl font-black">Audit Generated</h2>
-                <p className="text-white/40 text-sm">{result.store_maps_url}</p>
+
+              <div className="flex gap-4">
+                <div className="px-6 py-3 bg-white/5 rounded-2xl border border-white/5 flex flex-col items-center sm:items-start">
+                  <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Store Format</span>
+                  <span className="text-lg font-bold text-purple-400 capitalize">{result.outlet_type}</span>
+                </div>
+                <div className="px-6 py-3 bg-white/5 rounded-2xl border border-white/5 flex flex-col items-center sm:items-start">
+                  <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Scan Depth</span>
+                  <span className="text-lg font-bold text-purple-400">{result.total_images_scraped} Views</span>
+                </div>
               </div>
             </div>
 
-            {result.audit_data.map((photo: any, idx: number) => (
-              <div key={idx} className="mb-16">
-                <div className="flex items-center gap-4 mb-6">
-                  <span className="text-[10px] font-black bg-white/10 px-3 py-1 rounded-full uppercase tracking-widest text-white/60">
-                    Viewpoint {idx + 1}
-                  </span>
-                  <hr className="flex-1 border-white/5" />
-                </div>
-                <AuditDisplay
-                  imageUrl={photo.image_url}
-                  detections={photo.detections}
-                />
-              </div>
-            ))}
+            <AuditDisplay
+              imageUrl={result.store_maps_url} // This is just a placeholder or we need to pass detections
+              detections={[]} // AuditDisplay will be updated to handle the new CoV result
+              covResult={result}
+            />
           </motion.section>
         )}
       </AnimatePresence>
@@ -219,17 +249,23 @@ export default function RRISDashboard() {
       <AnimatePresence>
         {result && (
           <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
-            onClick={handleSyncToSheets}
-            className="fixed bottom-10 right-10 w-20 h-20 bg-emerald-500 text-black rounded-full shadow-2xl flex items-center justify-center group hover:bg-cyan-400 transition-colors z-[100]"
+            onClick={() => {
+              toast.promise(
+                fetch(`${API_URL}/sync-sheets`, { method: 'POST', headers: { 'X-RRIS-SECRET': APP_SECRET } }),
+                {
+                  loading: 'Syncing Intelligence...',
+                  success: 'Distributed to Cloud Nodes',
+                  error: 'Sync Interrupted',
+                }
+              );
+            }}
+            className="fixed bottom-10 right-10 w-20 h-20 bg-purple-600 text-white rounded-[30px] shadow-2xl flex items-center justify-center group hover:shadow-[0_0_30px_rgba(139,92,246,0.6)] transition-all z-50 border border-purple-400/30"
           >
             <Table size={32} />
-            <div className="absolute right-full mr-4 bg-black/80 px-4 py-2 rounded-xl text-white text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border border-white/10 backdrop-blur-sm pointer-events-none">
-              Sync to Google Sheets
-            </div>
           </motion.button>
         )}
       </AnimatePresence>
