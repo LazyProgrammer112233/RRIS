@@ -15,9 +15,13 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 
 def get_image_from_url(url):
     """Fetches an image from URL and returns a PIL Image object."""
-    response = requests.get(url, stream=True)
-    response.raise_for_status()
-    return Image.open(io.BytesIO(response.content))
+    try:
+        response = requests.get(url, stream=True, timeout=10)
+        response.raise_for_status()
+        return Image.open(io.BytesIO(response.content))
+    except Exception as e:
+        print(f"[Vision Engine] Image fetch failed for {url}: {e}")
+        raise
 
 from prompts import SYSTEM_PROMPT
 

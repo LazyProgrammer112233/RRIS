@@ -43,7 +43,8 @@ export default function RRISDashboard() {
             toast.success('Audit Intelligence Synchronized');
           } else if (data.status === 'FAILED') {
             setIsLoading(false);
-            toast.error('Intelligence Retrieval Failed');
+            const errorMsg = data.result?.error || 'Intelligence Retrieval Failed';
+            toast.error(errorMsg);
           }
         } catch (err) {
           console.error("Polling error:", err);

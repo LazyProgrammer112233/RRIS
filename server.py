@@ -146,15 +146,14 @@ async def background_audit(task_id: str, maps_url: str):
     
     try:
         from main import run_audit
-        await run_audit(maps_url)
+        # run_audit now returns the report dict directly and raises exceptions on fail
+        audit_result = await run_audit(maps_url)
         
-        result_path = "audit_report.json"
-        if os.path.exists(result_path):
-            with open(result_path, "r") as f:
-                result_data = json.load(f)
-            task_manager.update(task_id, "COMPLETED", result_data)
+        if audit_result:
+            task_manager.update(task_id, "COMPLETED", audit_result)
         else:
-            task_manager.update(task_id, "FAILED", {"error": "No report generated"})
+            task_manager.update(task_id, "FAILED", {"error": "Audit returned empty result without exception."})
+            
     except Exception as e:
         print(f"❌ Audit Error for {task_id}: {e}")
         task_manager.update(task_id, "FAILED", {"error": str(e)})

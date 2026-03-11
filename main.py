@@ -11,12 +11,11 @@ async def run_audit(maps_url):
     try:
         photo_urls = await scrape_google_maps_photos(maps_url, max_photos=5)
         if not photo_urls:
-            print("❌ No photo URLs extracted.")
-            return
+            raise RuntimeError("Scraper extracted 0 images. Verify the Google Maps URL corresponds to a valid store listing.")
         print(f"📸 Found {len(photo_urls)} high-res photos.")
     except Exception as e:
         print(f"❌ Scraper Error: {e}")
-        return
+        raise RuntimeError(f"Audit failed during image extraction: {str(e)}")
 
     # Step 2: Run Two-Stage CoV Audit
     try:
@@ -25,8 +24,7 @@ async def run_audit(maps_url):
         report_output["total_images_scraped"] = len(photo_urls)
         
         if "error" in report_output:
-            print(f"❌ Vision Engine Error: {report_output['error']}")
-            return
+            raise RuntimeError(f"Vision Engine reported error: {report_output['error']}")
 
         print(f"\n--- CoV Audit Result ---")
         print(f"Outlet Type: {report_output.get('outlet_type')}")
@@ -34,16 +32,18 @@ async def run_audit(maps_url):
         print(f"Method: {report_output.get('detection_method')}")
         print(f"Confidence: {report_output.get('confidence')}")
 
+        # Optional: Save a local copy for debug, but return the dict
+        try:
+            with open("audit_report.json", "w", encoding="utf-8") as f:
+                json.dump(report_output, f, indent=4)
+        except:
+            pass
+            
+        return report_output
+
     except Exception as e:
         print(f"❌ Vision Engine Execution Error: {e}")
-        return
-
-    # Step 3: Save to JSON
-    json_path = "audit_report.json"
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(report_output, f, indent=4)
-        
-    print(f"\n✅ Audit Complete! Results saved to {json_path}")
+        raise RuntimeError(f"Audit failed during AI analysis: {str(e)}")
 
     # Step 4: Export to Google Sheets (Optional)
     try:
