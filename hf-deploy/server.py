@@ -26,8 +26,8 @@ print(f"📦 Python: {sys.version}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://rris-frontend.vercel.app",  # Production Vercel URL
-        "http://localhost:3000",               # Local dev
+        "https://rris.vercel.app",      # Production Vercel URL
+        "http://localhost:3000",          # Local dev
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -36,15 +36,22 @@ app.add_middleware(
 
 # === X-RRIS-SECRET Security Middleware ===
 APP_SECRET = os.getenv("APP_SECRET", "")
+print(f"🔐 APP_SECRET loaded: {'YES (' + str(len(APP_SECRET)) + ' chars)' if APP_SECRET else 'NOT SET — middleware disabled'}")
 
 @app.middleware("http")
 async def verify_secret(request: Request, call_next):
-    """Intercept all requests except /health and validate the secret header."""
-    if request.url.path == "/health" or request.url.path == "/docs" or request.url.path == "/openapi.json":
+    """Intercept all requests except /health and preflight OPTIONS."""
+    # Allow health check, docs, and CORS preflight through
+    exempt_paths = {"/health", "/docs", "/openapi.json", "/favicon.ico"}
+    if request.url.path in exempt_paths or request.method == "OPTIONS":
+        return await call_next(request)
+    
+    # If APP_SECRET is not configured, skip enforcement (allow all)
+    if not APP_SECRET:
         return await call_next(request)
     
     incoming_secret = request.headers.get("X-RRIS-SECRET", "")
-    if not APP_SECRET or incoming_secret != APP_SECRET:
+    if incoming_secret != APP_SECRET:
         return JSONResponse(
             status_code=403,
             content={"detail": "Forbidden: Invalid or missing X-RRIS-SECRET header."}
@@ -139,15 +146,14 @@ async def background_audit(task_id: str, maps_url: str):
     
     try:
         from main import run_audit
-        await run_audit(maps_url)
+        # run_audit now returns the report dict directly and raises exceptions on fail
+        audit_result = await run_audit(maps_url)
         
-        result_path = "audit_report.json"
-        if os.path.exists(result_path):
-            with open(result_path, "r") as f:
-                result_data = json.load(f)
-            task_manager.update(task_id, "COMPLETED", result_data)
+        if audit_result:
+            task_manager.update(task_id, "COMPLETED", audit_result)
         else:
-            task_manager.update(task_id, "FAILED", {"error": "No report generated"})
+            task_manager.update(task_id, "FAILED", {"error": "Audit returned empty result without exception."})
+            
     except Exception as e:
         print(f"❌ Audit Error for {task_id}: {e}")
         task_manager.update(task_id, "FAILED", {"error": str(e)})
