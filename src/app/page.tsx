@@ -53,10 +53,33 @@ export default function RRISDashboard() {
     setStatus('PENDING');
 
     try {
+      // 1. Resolve short URL locally via Vercel Edge Function first
+      // This bypasses Hugging Face IP blocks for goo.gl links
+      let finalUrl = mapsUrl;
+      if (mapsUrl.includes("maps.app.goo.gl") || mapsUrl.includes("goo.gl")) {
+        try {
+          const resolveRes = await fetch('/api/resolve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ maps_url: mapsUrl })
+          });
+          if (resolveRes.ok) {
+            const resolveData = await resolveRes.json();
+            if (resolveData.resolved_url) {
+              finalUrl = resolveData.resolved_url;
+              console.log("Resolved short URL to:", finalUrl);
+            }
+          }
+        } catch (resolveErr) {
+          console.error("Short URL resolution failed:", resolveErr);
+        }
+      }
+
+      // 2. Send the canonical resolved URL to the HF Backend
       const res = await fetch(`${API_URL}/audit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-RRIS-SECRET': APP_SECRET },
-        body: JSON.stringify({ maps_url: mapsUrl }),
+        body: JSON.stringify({ maps_url: finalUrl }),
       });
       const data = await res.json();
       setTaskId(data.task_id);
