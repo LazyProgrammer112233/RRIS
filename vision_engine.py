@@ -4,10 +4,11 @@ import requests
 import io
 from PIL import Image
 import google.generativeai as genai
+import os
 from dotenv import load_dotenv
 import re
 
-load_dotenv()
+load_dotenv(".env.local") if os.path.exists(".env.local") else load_dotenv()
 
 # Configure Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -55,15 +56,38 @@ def run_cov_audit(image_urls):
             }
         )
         
+        # Deep inspection for troubleshooting
+        if not response:
+            print("[Vision Engine] Error: Received empty response object from Gemini.")
+            return {"error": "Empty AI response"}
+            
+        if not response.candidates:
+             print(f"[Vision Engine] Error: No candidates in response. Metadata: {response.prompt_feedback}")
+             return {"error": "No candidates generated (possible safety block)"}
+
         # 3. Clean and parse JSON
-        text = response.text
+        try:
+            text = response.text
+        except ValueError as ve:
+            # This happens if the response was blocked by safety filters
+            print(f"[Vision Engine] Error accessing text (safety filter?): {ve}")
+            return {"error": f"Response blocked by safety: {str(ve)}"}
+
+        if not text:
+            print("[Vision Engine] Error: response.text is empty.")
+            return {"error": "AI returned empty text"}
+
         # Ensure we only have the JSON object
         json_match = re.search(r'\{.*\}', text, re.DOTALL)
         if json_match:
-            return json.loads(json_match.group())
+            try:
+                return json.loads(json_match.group())
+            except json.JSONDecodeError as jde:
+                print(f"[Vision Engine] JSON Decode Error: {jde}. Raw match: {json_match.group()}")
+                return {"error": f"JSON parse error: {str(jde)}"}
         else:
-            print(f"[Vision Engine] No JSON found in response: {text}")
-            return {"error": "Invalid engine response"}
+            print(f"[Vision Engine] No JSON found in response. Raw text snippet: {text[:200]}")
+            return {"error": "Incompatible engine response format"}
             
     except Exception as e:
         print(f"[Vision Engine] Critical Error in run_cov_audit: {e}")

@@ -1,20 +1,23 @@
 import asyncio
 import json
 import os
+from dotenv import load_dotenv
 from scraper import scrape_google_maps_photos
 from vision_engine import run_cov_audit
 
+load_dotenv(".env.local") if os.path.exists(".env.local") else load_dotenv()
+
 async def run_audit(maps_url):
-    print(f"🚀 Starting Advanced CoV Audit for: {maps_url}")
+    print(f"[Audit] Starting Advanced CoV Audit for: {maps_url}")
     
     # Step 1: Scrape Photo URLs
     try:
         photo_urls = await scrape_google_maps_photos(maps_url, max_photos=5)
         if not photo_urls:
             raise RuntimeError("Scraper extracted 0 images. Verify the Google Maps URL corresponds to a valid store listing.")
-        print(f"📸 Found {len(photo_urls)} high-res photos.")
+        print(f"[Scraper] Found {len(photo_urls)} high-res photos.")
     except Exception as e:
-        print(f"❌ Scraper Error: {e}")
+        print(f"[Scraper] Error: {e}")
         raise RuntimeError(f"Audit failed during image extraction: {str(e)}")
 
     # Step 2: Run Two-Stage CoV Audit
@@ -42,15 +45,15 @@ async def run_audit(maps_url):
         return report_output
 
     except Exception as e:
-        print(f"❌ Vision Engine Execution Error: {e}")
+        print(f"[Vision Engine] Execution Error: {e}")
         raise RuntimeError(f"Audit failed during AI analysis: {str(e)}")
 
     # Step 4: Export to Google Sheets (Optional)
     try:
         from google_sheets import export_to_sheets
-        export_to_sheets(json_path, "RRIS_Production_Audit_Log")
+        export_to_sheets("audit_report.json", "RRIS_Production_Audit_Log")
     except Exception as e:
-        print(f"⚠️ Sheets Export skipped/failed: {e}")
+        print(f"[Sheets] Export skipped/failed: {e}")
 
 if __name__ == "__main__":
     import sys

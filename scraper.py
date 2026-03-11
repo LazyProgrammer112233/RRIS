@@ -3,6 +3,9 @@ import os
 import re
 import requests
 import googlemaps
+from dotenv import load_dotenv
+
+load_dotenv(".env.local") if os.path.exists(".env.local") else load_dotenv()
 
 # Note: We still use async for compatibility with the existing main.py structure,
 # but the underlying calls are synchronous googlemaps API requests.
