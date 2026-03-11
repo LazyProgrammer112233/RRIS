@@ -39,8 +39,10 @@ APP_SECRET = os.getenv("APP_SECRET", "")
 
 @app.middleware("http")
 async def verify_secret(request: Request, call_next):
-    """Intercept all requests except /health and validate the secret header."""
-    if request.url.path == "/health" or request.url.path == "/docs" or request.url.path == "/openapi.json":
+    """Intercept all requests except /health and preflight OPTIONS."""
+    # Allow health check, docs, and CORS preflight through
+    exempt_paths = {"/health", "/docs", "/openapi.json", "/favicon.ico"}
+    if request.url.path in exempt_paths or request.method == "OPTIONS":
         return await call_next(request)
     
     incoming_secret = request.headers.get("X-RRIS-SECRET", "")
