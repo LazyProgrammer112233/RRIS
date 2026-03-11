@@ -1,6 +1,7 @@
 import asyncio
 import re
 import os
+import requests
 from playwright.async_api import async_playwright
 
 import random
@@ -26,6 +27,17 @@ async def scrape_google_maps_photos(maps_url, max_photos=10):
     Enhanced Universal Scraper for Google Maps with Stealth Measures.
     Hardened for headless environments (HF Spaces).
     """
+    # Resolve short URLs (maps.app.goo.gl) to full Google Maps URLs
+    # Headless browsers can't follow Google Dynamic Links
+    if "maps.app.goo.gl" in maps_url or "goo.gl" in maps_url:
+        try:
+            print(f"[Scraper] Resolving short URL: {maps_url}")
+            resp = requests.head(maps_url, allow_redirects=True, timeout=10)
+            maps_url = resp.url
+            print(f"[Scraper] Resolved to: {maps_url}")
+        except Exception as e:
+            print(f"[Scraper] Short URL resolution failed: {e}")
+    
     async with async_playwright() as p:
         # User-Agent Rotation
         ua = random.choice(USER_AGENTS)
