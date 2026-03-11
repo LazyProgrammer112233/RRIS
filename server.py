@@ -36,6 +36,7 @@ app.add_middleware(
 
 # === X-RRIS-SECRET Security Middleware ===
 APP_SECRET = os.getenv("APP_SECRET", "")
+print(f"🔐 APP_SECRET loaded: {'YES (' + str(len(APP_SECRET)) + ' chars)' if APP_SECRET else 'NOT SET — middleware disabled'}")
 
 @app.middleware("http")
 async def verify_secret(request: Request, call_next):
@@ -45,8 +46,12 @@ async def verify_secret(request: Request, call_next):
     if request.url.path in exempt_paths or request.method == "OPTIONS":
         return await call_next(request)
     
+    # If APP_SECRET is not configured, skip enforcement (allow all)
+    if not APP_SECRET:
+        return await call_next(request)
+    
     incoming_secret = request.headers.get("X-RRIS-SECRET", "")
-    if not APP_SECRET or incoming_secret != APP_SECRET:
+    if incoming_secret != APP_SECRET:
         return JSONResponse(
             status_code=403,
             content={"detail": "Forbidden: Invalid or missing X-RRIS-SECRET header."}
