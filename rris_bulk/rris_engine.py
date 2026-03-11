@@ -65,7 +65,7 @@ Respond with ONLY a JSON object in this exact schema:
 class RRISEngine:
     def __init__(self, api_key):
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(config.get('model_name', 'gemini-2.0-flash'))
+        self.model = genai.GenerativeModel(config.get('model_name', 'gemini-2.5-flash'))
 
     async def analyze_store(self, image_paths):
         """
