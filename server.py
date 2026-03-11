@@ -1,165 +1,180 @@
 import os
 import uuid
-import asyncio
-import sqlite3
 import json
 import sys
-from datetime import datetime
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+import threading
+from datetime import datetime, timedelta
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from main import run_audit
-from google_sheets import export_to_sheets
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# ============================================================
+# RRIS Audit API — Hugging Face Spaces Edition
+# ============================================================
 
 app = FastAPI(title="RRIS Audit API")
 
-print("🔥 RRIS Engine Initializing...")
-print(f"📂 Current Working Directory: {os.getcwd()}")
-print(f"📦 Python Version: {sys.version}")
+print("🔥 RRIS Engine Initializing (HF Spaces)...")
+print(f"📂 CWD: {os.getcwd()}")
+print(f"📦 Python: {sys.version}")
 
+# === CORS Middleware ===
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://rris-frontend.vercel.app", # Final Production Vercel URL
+        "https://rris-frontend.vercel.app",  # Production Vercel URL
+        "http://localhost:3000",               # Local dev
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# === X-RRIS-SECRET Security Middleware ===
+APP_SECRET = os.getenv("APP_SECRET", "")
+
+@app.middleware("http")
+async def verify_secret(request: Request, call_next):
+    """Intercept all requests except /health and validate the secret header."""
+    if request.url.path == "/health" or request.url.path == "/docs" or request.url.path == "/openapi.json":
+        return await call_next(request)
+    
+    incoming_secret = request.headers.get("X-RRIS-SECRET", "")
+    if not APP_SECRET or incoming_secret != APP_SECRET:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Forbidden: Invalid or missing X-RRIS-SECRET header."}
+        )
+    return await call_next(request)
+
+# === Health Endpoint (HF Spec) ===
 @app.get("/health")
 async def health_check():
-    """Minimal health check for fast Railway response"""
-    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+    """HF Spaces health check — must return 200 OK fast."""
+    return {"status": "ready", "memory_limit": "16GB"}
 
-@app.get("/status/deep")
-async def deep_health_check():
-    """Detailed sanity check for browser and env"""
-    health = {
-        "status": "ready",
-        "browser": "unverified",
-        "db": "connected" if os.path.exists(DB_PATH) else "initializing",
-        "env": {
-            "GEMINI_KEY": "set" if os.getenv("GEMINI_API_KEY") else "missing",
-            "PLACES_KEY": "set" if os.getenv("GOOGLE_PLACES_API_KEY") else "missing"
-        }
-    }
-    try:
-        import subprocess
-        res = subprocess.run(["ls", "-R", "/ms-playwright/chromium*"], capture_output=True, text=True)
-        if "chrome" in res.stdout.lower() or res.returncode == 0:
-            health["browser"] = "installed"
-        else:
-            check = subprocess.run(["playwright", "--version"], capture_output=True, text=True)
-            health["browser"] = f"verified ({check.stdout.strip()})"
-    except Exception as e:
-        health["browser_error"] = str(e)
-        health["status"] = "partial_ready"
-    return health
+# ============================================================
+# InMemoryTaskManager (Thread-Safe)
+# ============================================================
 
-DB_PATH = "/app/data/rris_tasks.db"
+class InMemoryTaskManager:
+    """Thread-safe in-memory task store with auto-expiry."""
+    
+    def __init__(self, expiry_hours: int = 1):
+        self._tasks: dict = {}
+        self._lock = threading.Lock()
+        self._expiry_hours = expiry_hours
+        # Start background purge thread
+        self._purge_thread = threading.Thread(target=self._purge_loop, daemon=True)
+        self._purge_thread.start()
+        print("🧹 Task Purge Thread Started (1-hour expiry).")
+    
+    def create(self, task_id: str, url: str) -> dict:
+        with self._lock:
+            task = {
+                "task_id": task_id,
+                "url": url,
+                "status": "PENDING",
+                "result": None,
+                "created_at": datetime.now().isoformat()
+            }
+            self._tasks[task_id] = task
+            return task
+    
+    def update(self, task_id: str, status: str, result: dict = None):
+        with self._lock:
+            if task_id in self._tasks:
+                self._tasks[task_id]["status"] = status
+                if result is not None:
+                    self._tasks[task_id]["result"] = result
+    
+    def get(self, task_id: str) -> dict | None:
+        with self._lock:
+            return self._tasks.get(task_id)
+    
+    def _purge_loop(self):
+        """Background loop that purges old completed/failed tasks every 5 minutes."""
+        import time
+        while True:
+            time.sleep(300)  # Check every 5 minutes
+            cutoff = datetime.now() - timedelta(hours=self._expiry_hours)
+            with self._lock:
+                to_delete = [
+                    tid for tid, task in self._tasks.items()
+                    if task["status"] in ("COMPLETED", "FAILED")
+                    and datetime.fromisoformat(task["created_at"]) < cutoff
+                ]
+                for tid in to_delete:
+                    del self._tasks[tid]
+                if to_delete:
+                    print(f"🧹 Purged {len(to_delete)} expired tasks.")
 
-def init_db():
-    # Ensure data directory exists
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tasks (
-            id TEXT PRIMARY KEY,
-            url TEXT,
-            status TEXT,
-            result TEXT,
-            created_at TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
+# Initialize the task manager
+task_manager = InMemoryTaskManager(expiry_hours=1)
 
-init_db()
+# ============================================================
+# API Models
+# ============================================================
 
 class AuditRequest(BaseModel):
     maps_url: str
 
-class TaskStatus(BaseModel):
+class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
     result: dict = None
     created_at: str
 
+# ============================================================
+# Audit Pipeline
+# ============================================================
+
 async def background_audit(task_id: str, maps_url: str):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    # Update status to RUNNING
-    cursor.execute("UPDATE tasks SET status = ? WHERE id = ?", ("RUNNING", task_id))
-    conn.commit()
+    """Run the full audit pipeline in the background."""
+    task_manager.update(task_id, "RUNNING")
     
     try:
-        # Run the audit
-        # Note: main.py saves to audit_report.json by default. 
-        # We might want to pass a specific filename or handle the return value.
+        from main import run_audit
         await run_audit(maps_url)
         
-        # Load the result
         result_path = "audit_report.json"
         if os.path.exists(result_path):
             with open(result_path, "r") as f:
                 result_data = json.load(f)
-            
-            # Update status to COMPLETED
-            cursor.execute("UPDATE tasks SET status = ?, result = ? WHERE id = ?", 
-                           ("COMPLETED", json.dumps(result_data), task_id))
+            task_manager.update(task_id, "COMPLETED", result_data)
         else:
-            cursor.execute("UPDATE tasks SET status = ?, result = ? WHERE id = ?", 
-                           ("FAILED", json.dumps({"error": "No report generated"}), task_id))
-        
+            task_manager.update(task_id, "FAILED", {"error": "No report generated"})
     except Exception as e:
-        cursor.execute("UPDATE tasks SET status = ?, result = ? WHERE id = ?", 
-                       ("FAILED", json.dumps({"error": str(e)}), task_id))
-    
-    conn.commit()
-    conn.close()
+        print(f"❌ Audit Error for {task_id}: {e}")
+        task_manager.update(task_id, "FAILED", {"error": str(e)})
 
 @app.post("/audit", response_model=dict)
 async def start_audit(request: AuditRequest, background_tasks: BackgroundTasks):
+    """Start a new audit task."""
     task_id = str(uuid.uuid4())
-    created_at = datetime.now().isoformat()
-    
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO tasks (id, url, status, result, created_at) VALUES (?, ?, ?, ?, ?)",
-                   (task_id, request.maps_url, "PENDING", None, created_at))
-    conn.commit()
-    conn.close()
+    task = task_manager.create(task_id, request.maps_url)
     
     background_tasks.add_task(background_audit, task_id, request.maps_url)
     
     return {"task_id": task_id, "status": "PENDING"}
 
-@app.get("/status/{task_id}", response_model=TaskStatus)
+@app.get("/status/{task_id}")
 async def get_task_status(task_id: str):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, status, result, created_at FROM tasks WHERE id = ?", (task_id,))
-    row = cursor.fetchone()
-    conn.close()
-    
-    if not row:
+    """Check the status of an audit task."""
+    task = task_manager.get(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    
-    result = json.loads(row[2]) if row[2] else None
-    
-    return TaskStatus(
-        task_id=row[0],
-        status=row[1],
-        result=result,
-        created_at=row[3]
-    )
+    return task
 
 @app.post("/sync-sheets")
 async def sync_sheets():
+    """Manually sync the latest audit report to Google Sheets."""
     try:
+        from google_sheets import export_to_sheets
         if os.path.exists("audit_report.json"):
             export_to_sheets("audit_report.json", "RRIS_Production_Audit_Log")
             return {"status": "SUCCESS"}
@@ -168,8 +183,11 @@ async def sync_sheets():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============================================================
+# Entrypoint
+# ============================================================
+
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    print(f"📡 Starting server on 0.0.0.0:{port}")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    print("📡 Starting RRIS on 0.0.0.0:7860")
+    uvicorn.run(app, host="0.0.0.0", port=7860)

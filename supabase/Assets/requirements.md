@@ -1,73 +1,78 @@
-Project: High-Accuracy FMCG Asset Detection Engine
-1. Executive Summary & Context
-Goal: To build a robust pipeline that extracts store listing images from Google Maps and performs a high-precision audit of FMCG assets (Visi Coolers, Chest Freezers, Branded Racks).
-Previous Failures: The system failed due to URL redirect issues and generic vision prompts that lacked FMCG domain knowledge.
-New Strategy: Use a Two-Stage Vision Analysis combined with Chain-of-Thought (CoT) prompting and high-res image manipulation.
+Project Specification: RRIS Backend Migration to Hugging Face Spaces (Docker)
+1. Context & Objective
+The RRIS (Retail Refrigeration Intelligence System) is migrating its backend from Railway to Hugging Face Spaces to leverage the 16GB RAM / 2 vCPU free tier. This shift is necessary to handle high-resolution Playwright scraping and multi-stage Vision processing without memory-related build stalls.
 
-2. Phase 1: Deep-Link Data Retrieval (Browser Agent)
-Antigravity must use its Integrated Browser Tool to handle the dynamic nature of Google Maps.
+2. Infrastructure Strategy: Hugging Face Docker SDK
+Hugging Face Spaces will act as a persistent, high-performance container host for our FastAPI application.
 
-Extraction Logic:
-URL Resolution: Take the goo.gl or google.com/maps share URL and navigate. Wait for the final redirect to the store's "Place ID" page.
+A. Container Environment (The Dockerfile)
+Base Image: Must use mcr.microsoft.com/playwright/python:v1.40.0-jammy to ensure all Chromium dependencies and the browser itself are pre-baked into the image.
 
-Photo Navigation: Identify and click the "Photos" tab or the "All" photos category.
+Port Mapping: Hugging Face strictly listens on Port 7860. The FastAPI app must be configured to bind to this port.
 
-High-Res URL Transformation: * Locate the source URLs (typically hosted on lh3.googleusercontent.com).
+User Permissions: HF Spaces runs containers as a non-root user (UID 1000). The Dockerfile must:
 
-CRITICAL: Scraped URLs often have a resolution suffix like =w100-h100-p. You must programmatically replace these suffixes with =s2048 or =s0 to fetch the original high-resolution file.
+Create a user and set a home directory.
 
-Metadata Capture: Store the image URL along with the "User-Uploaded" or "Street View" tag if available.
+Grant write permissions to the /app directory.
 
-3. Phase 2: Vision Analysis Strategy (Gemini 2.5 Flash)
-Implement the Prompt Engineering Strategy using a two-stage recursive approach to maximize accuracy.
+Set ENV HOME=/home/user and PATH=$HOME/.local/bin:$PATH.
 
-Stage 1: Localization & Inventory
-Task: Identify the presence and location of assets.
-System Prompt: > "You are an expert Retail Auditor. Analyze this retail environment. Identify every instance of cooling equipment (Visi Coolers, Chest Freezers) and branded display racks.
+Browser Pathing: Explicitly set ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright to ensure the scraper finds the pre-installed Chromium instance.
 
-Output Format: Return a JSON list of objects: {"asset_type": "string", "box_2d": [ymin, xmin, ymax, xmax], "confidence": "float"}.
-Constraint: Do not classify the brand yet. Focus only on accurate bounding boxes."
+B. Application Logic Adjustments (server.py)
+Stateless Persistence: Since HF Spaces storage is ephemeral, remove SQLite (rris_tasks.db). Implement an InMemoryTaskManager using a global Python dictionary.
 
-Stage 2: Specific Asset Auditing (Crop & Classify)
-Task: For every bounding box detected in Stage 1, crop the image and perform a secondary analysis.
-System Prompt (The FMCG Dictionary):
+Task Expiry: Implement a background thread or a FastAPI startup task that purges completed/failed tasks older than 1 hour to prevent memory leaks.
 
-"Analyze this cropped image of a retail asset. Use the following definitions:
+Security Middleware (The "X-RRIS-SECRET" Guard): * Implement a middleware that intercepts all incoming requests (except /health).
 
-Visi Cooler: Vertical unit, transparent glass door, internal shelves, used for chilled beverages.
+Check for a header named X-RRIS-SECRET.
 
-Chest Freezer: Horizontal unit, sliding glass or solid lid, used for frozen goods/ice cream.
+If the header value does not match the APP_SECRET environment variable, return a 403 Forbidden error. This prevents unauthorized usage of our Gemini API credits.
 
-Branded Rack: Non-electrical display stands with prominent brand headers.
+3. Frontend Integration (Vercel Handshake)
+The Next.js frontend on Vercel must be updated to:
 
-Chain-of-Thought (CoT) Requirement:
+URL Update: Use the new Hugging Face Space URL (e.g., https://[username]-[space-name].hf.space).
 
-Identify the primary brand logo visible (e.g., Coca-Cola, Pepsi, Amul).
+Header Injection: Every fetch request to the backend must now include the X-RRIS-SECRET in the headers.
 
-Determine if the unit is 'Pure' (only one brand) or 'Mixed' (multiple brands inside).
+4. Technical Implementation Tasks for Antigravity
+Task 1: Generate the HF-Optimized Dockerfile
+Create a Dockerfile that handles the non-root user requirements and pre-installs all necessary Python dependencies (FastAPI, Uvicorn, Pillow, Google-GenerativeAI).
 
-Assess the 'Stock Level' (Empty, Partially Stocked, Full).
+Task 2: Update server.py & vision_engine.py
+Update the Uvicorn start command to port 7860.
 
-Final Output: A structured JSON summary of the specific asset."
+Refactor the task manager to use a thread-safe Dict.
 
-4. Implementation Instructions for Antigravity
-A. Environment Setup
-Use the provided Gemini 2.5 Flash API Key.
+Add the X-RRIS-SECRET validation logic.
 
-Utilize PIL (Pillow) or OpenCV for the image cropping logic between Stage 1 and Stage 2.
+Task 3: Hugging Face Metadata (README.md)
+Generate the mandatory YAML header for Hugging Face to identify the space as a Docker application:
 
-B. Workflow Execution Script
-Initialize Browser: Navigate and extract top 10 most relevant store images.
+YAML
+---
+title: RRIS Engine
+emoji: 🧊
+colorFrom: blue
+colorTo: gray
+sdk: docker
+pinned: false
+---
+5. Verification & Health Checks
+Health Endpoint: /health must return {"status": "ready", "memory_limit": "16GB"}.
 
-Run Stage 1: Batch process images to find all asset coordinates.
+Security Test: A request without the X-RRIS-SECRET header must fail with a 403.
 
-Run Stage 2: Iterate through coordinates, crop the original high-res image, and call the classification prompt.
+Handoff Instructions for Antigravity
+Please provide the following artifacts based on these requirements:
 
-Consolidate: Generate a final audit_report.json containing the store name, address (from Maps), and a detailed list of detected assets with their brand/status.
+The complete Dockerfile.
 
-5. Error Handling & Edge Cases
-Redirect Loops: If the browser fails to resolve the Maps URL after 3 attempts, fallback to searching the store name + city on Google Search to find the listing.
+The updated server.py and InMemoryTaskManager logic.
 
-Low Resolution: If an image is below 720p after the URL transformation, flag it as 'Low Confidence' in the final report.
+The README.md with the required YAML header.
 
-Antigravity, please confirm once the Browser Agent has successfully resolved the first test URL and extracted the high-res links.
+The specific .env keys I need to add to the Hugging Face "Secrets" panel (e.g., GEMINI_API_KEY, APP_SECRET).

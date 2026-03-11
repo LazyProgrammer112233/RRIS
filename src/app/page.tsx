@@ -13,8 +13,9 @@ export default function RRISDashboard() {
   const [result, setResult] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Get API URL from env or fallback to localhost
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  // Get API URL and Secret from env
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7860';
+  const APP_SECRET = process.env.NEXT_PUBLIC_APP_SECRET || '';
 
   // Poll for status if we have a taskId
   useEffect(() => {
@@ -22,7 +23,9 @@ export default function RRISDashboard() {
     if (taskId && (status === 'PENDING' || status === 'RUNNING')) {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`${API_URL}/status/${taskId}`);
+          const res = await fetch(`${API_URL}/status/${taskId}`, {
+            headers: { 'X-RRIS-SECRET': APP_SECRET },
+          });
           const data = await res.json();
           setStatus(data.status);
           if (data.status === 'COMPLETED') {
@@ -52,7 +55,7 @@ export default function RRISDashboard() {
     try {
       const res = await fetch(`${API_URL}/audit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-RRIS-SECRET': APP_SECRET },
         body: JSON.stringify({ maps_url: mapsUrl }),
       });
       const data = await res.json();
@@ -66,7 +69,7 @@ export default function RRISDashboard() {
 
   const handleSyncToSheets = async () => {
     toast.promise(
-      fetch(`${API_URL}/sync-sheets`, { method: 'POST' }),
+      fetch(`${API_URL}/sync-sheets`, { method: 'POST', headers: { 'X-RRIS-SECRET': APP_SECRET } }),
       {
         loading: 'Syncing to Google Sheets...',
         success: 'Successfully Synced!',
