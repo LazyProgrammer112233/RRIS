@@ -46,3 +46,4 @@ rris_tasks.db
 audit_report.json
 *.png
 *.webp
+.env*.local

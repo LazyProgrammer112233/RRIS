@@ -1,5 +1,5 @@
-# Use lightweight Python image
-FROM python:3.10-slim
+# Use official Playwright image for Python (Pre-installed Chromium)
+FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 
 # === HF Spaces: Non-Root User Setup ===
 RUN useradd -m -u 1000 user
@@ -7,6 +7,7 @@ ENV HOME=/home/user
 ENV PATH=$HOME/.local/bin:$PATH
 
 # === Environment Variables ===
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PYTHONUNBUFFERED=1
 
 # Set working directory and grant permissions
