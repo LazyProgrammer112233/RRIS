@@ -91,7 +91,7 @@ async def scrape_google_maps_photos(maps_url, max_photos=10):
     # 4. Fetch Place Details (Photos)
     print(f"[Scraper] Fetching details for Place ID: {place_id}")
     try:
-        details = gmaps.place(place_id=place_id, fields=["name", "photos"])
+        details = gmaps.place(place_id=place_id, fields=["name", "photo"])
         result = details.get("result", {})
         
         if not result or "photos" not in result:
@@ -127,7 +127,6 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         test_url = sys.argv[1]
         
-    loop = asyncio.get_event_loop()
-    urls = loop.run_until_complete(scrape_google_maps_photos(test_url))
+    urls = asyncio.run(scrape_google_maps_photos(test_url))
     for i, url in enumerate(urls):
         print(f"{i+1}: {url}")
