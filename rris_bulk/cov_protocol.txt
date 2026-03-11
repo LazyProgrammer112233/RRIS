@@ -1,0 +1,12 @@
+RRIS Chain-of-Verification (CoV) Protocol
+
+Stage 1: Outlet Type Classification
+- Examine images to classify outlet type.
+- If supermarket or hypermarket, refrigeration is inferred ( Fridges assumed).
+- Otherwise, proceed to Stage 2.
+
+Stage 2: Visual Cooling Device Detection
+- Analyze images for specific cooling appliances.
+- Verify detections pass physical structure and 3D object checks.
+- Confidence must be > 70%.
+- Ignore posters/stickers.

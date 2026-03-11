@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Loader2, ArrowRight, Table, CheckCircle, Info, Database, Sparkles, Cpu, Layers } from 'lucide-react';
+import { Search, Loader2, ArrowRight, Table, CheckCircle, Info, Database, Sparkles, Cpu, Layers, Download, Zap } from 'lucide-react';
 import AuditDisplay from '@/components/AuditDisplay';
 import toast from 'react-hot-toast';
 
@@ -156,6 +156,46 @@ export default function RRISDashboard() {
               </button>
             </div>
           </form>
+
+          {!result && (
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="mt-20 grid grid-cols-1 md:grid-cols-2 gap-6"
+            >
+              <div className="glass-card rounded-[24px] p-8 border-white/5 relative overflow-hidden group hover:purple-glow-sm transition-all duration-500">
+                <div className="absolute top-0 right-0 p-6 text-purple-500/10 group-hover:text-purple-500/20 transition-colors">
+                  <Database size={80} />
+                </div>
+                <div className="relative z-10">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-6 border border-purple-500/10">
+                    <Zap size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2">Industry Bulk Analysis</h3>
+                  <p className="text-white/40 text-sm leading-relaxed mb-8">
+                    Analyze thousands of outlets using CSV datasets. This runs locally on your computer for maximum privacy and processing speed.
+                  </p>
+                  <a 
+                    href="/rris_bulk_worker.zip" 
+                    download
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-sm font-bold text-white hover:bg-white/10 hover:border-purple-500/30 transition-all active:scale-95"
+                  >
+                    <Download size={16} />
+                    Install Offline Bulk Worker
+                  </a>
+                </div>
+              </div>
+
+              <div className="glass-card rounded-[24px] p-8 border-white/5 relative overflow-hidden group border-dashed border-white/10 flex flex-col justify-center items-center text-center opacity-50">
+                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/20 mb-4">
+                  <Layers size={20} />
+                </div>
+                <h3 className="text-lg font-bold text-white/40">Enterprise Integrations</h3>
+                <p className="text-white/20 text-xs mt-1">Coming Q4 2026</p>
+              </div>
+            </motion.div>
+          )}
         </motion.div>
       </div>
 

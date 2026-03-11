@@ -1,0 +1,16 @@
+{
+    "cooling_devices": [
+        "glass-door beverage cooler",
+        "chest freezer",
+        "commercial refrigerator",
+        "ice cream freezer",
+        "visi-cooler",
+        "bottle chiller"
+    ],
+    "verification_criteria": [
+        "physical structure (door, handle, compressor, temperature display)",
+        "3D object (not poster/sticker/banner)",
+        "realistic proportions",
+        "functional unit"
+    ]
+}

@@ -1,0 +1,11 @@
+pandas
+google-generativeai
+tqdm
+python-dotenv
+aiohttp
+opencv-python
+asyncio
+pyyaml
+Pillow
+requests
+colorama
