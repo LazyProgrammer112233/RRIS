@@ -3,34 +3,38 @@
 @theme {
     --color-primary: #8b5cf6;
     --color-primary-dark: #6d28d9;
-    --color-primary-glow: rgba(139, 92, 246, 0.5);
-    --color-bg-deep: #0a0510;
-    --color-glass-white: rgba(255, 255, 255, 0.03);
-    --color-glass-border: rgba(255, 255, 255, 0.08);
+    --color-primary-glow: rgba(139, 92, 246, 0.4);
+    --color-bg-deep: #050208;
+    --color-glass-white: rgba(255, 255, 255, 0.02);
+    --color-glass-border: rgba(255, 255, 255, 0.05);
 }
 
 @layer base {
     body {
-        @apply bg-[#0a0510] text-white antialiased selection:bg-purple-500/30;
+        @apply bg-[#050208] text-white antialiased selection:bg-purple-500/30;
         font-feature-settings: "cv11", "ss01";
     }
 }
 
 @layer utilities {
     .glass-card {
-        @apply bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-2xl;
+        @apply bg-white/[0.02] backdrop-blur-2xl border border-white/5 shadow-2xl;
+    }
+
+    .dark-glass {
+        @apply bg-black/40 backdrop-blur-3xl border border-white/5;
     }
 
     .glass-border {
-        @apply border border-white/10;
+        @apply border border-white/5;
     }
 
     .purple-glow-sm {
-        box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+        box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
     }
 
     .purple-glow-lg {
-        box-shadow: 0 0 50px rgba(139, 92, 246, 0.25);
+        box-shadow: 0 0 50px rgba(139, 92, 246, 0.2);
     }
 
     .no-scrollbar::-webkit-scrollbar {
@@ -41,14 +45,20 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
     }
+
+    /* Fix search bar focus */
+    .search-input:focus {
+        outline: none;
+        box-shadow: none;
+    }
 }
 
-/* Custom Mesh Gradient Background */
+/* Custom Mesh Gradient Background - Darker & Deeper */
 .mesh-gradient {
-    background-color: #0a0510;
+    background-color: #050208;
     background-image:
-        radial-gradient(at 0% 0%, hsla(263, 93%, 16%, 1) 0, transparent 50%),
-        radial-gradient(at 100% 0%, hsla(280, 100%, 10%, 1) 0, transparent 50%),
-        radial-gradient(at 100% 100%, hsla(250, 84%, 12%, 1) 0, transparent 50%),
-        radial-gradient(at 0% 100%, hsla(260, 100%, 10%, 1) 0, transparent 50%);
+        radial-gradient(at 0% 0%, hsla(263, 93%, 10%, 1) 0, transparent 60%),
+        radial-gradient(at 100% 0%, hsla(280, 100%, 7%, 1) 0, transparent 60%),
+        radial-gradient(at 100% 100%, hsla(250, 84%, 8%, 1) 0, transparent 60%),
+        radial-gradient(at 0% 100%, hsla(260, 100%, 7%, 1) 0, transparent 60%);
 }

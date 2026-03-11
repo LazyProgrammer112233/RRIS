@@ -28,69 +28,71 @@ export default function AuditDisplay({ covResult }: AuditDisplayProps) {
         <div className="space-y-12">
             {/* Main Result Card */}
             <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="glass-card rounded-[48px] p-12 purple-glow-lg border-white/10"
+                className="glass-card rounded-[32px] p-8 purple-glow-lg border-white/5"
             >
-                <div className="flex flex-col lg:flex-row gap-16">
+                <div className="flex flex-col lg:flex-row gap-12">
                     {/* Left Side: Status & reasoning */}
-                    <div className="flex-1 space-y-10">
+                    <div className="flex-1 space-y-8">
                         <div className="space-y-4">
                             <div className="flex items-center gap-3">
                                 {hasFridge ? (
-                                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
-                                        <ShieldCheck size={28} />
+                                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/10">
+                                        <ShieldCheck size={22} />
                                     </div>
                                 ) : (
-                                    <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-400 border border-red-500/20">
-                                        <AlertCircle size={28} />
+                                    <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-400 border border-red-500/10">
+                                        <AlertCircle size={22} />
                                     </div>
                                 )}
-                                <h3 className="text-4xl font-black text-white">
+                                <h3 className="text-2xl font-black text-white">
                                     {hasFridge ? 'Fridge Detected' : 'No Fridge Identified'}
                                 </h3>
                             </div>
-                            <p className="text-xl text-white/60 font-medium leading-relaxed italic">
-                                "{covResult.reason}"
-                            </p>
+                            <div className="dark-glass rounded-2xl p-5 border-white/[0.03]">
+                                <p className="text-base text-white/70 font-medium leading-relaxed italic">
+                                    {covResult.reason}
+                                </p>
+                            </div>
                         </div>
 
                         {/* Intelligence Metrics */}
-                        <div className="grid grid-cols-2 gap-6">
-                            <div className="p-6 bg-white/[0.02] rounded-3xl border border-white/5 space-y-1">
-                                <div className="flex items-center gap-2 text-white/30 text-[10px] font-black uppercase tracking-widest">
-                                    <Target size={14} className="text-purple-500" />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="p-4 bg-white/[0.01] rounded-2xl border border-white/5 space-y-1 group">
+                                <div className="flex items-center gap-2 text-white/20 text-[9px] font-black uppercase tracking-widest group-hover:text-purple-400/50 transition-colors">
+                                    <Target size={12} className="text-purple-500/40" />
                                     Confidence
                                 </div>
-                                <div className="text-2xl font-black text-white capitalize">{covResult.confidence}</div>
+                                <div className="text-xl font-black text-white/90 capitalize">{covResult.confidence}</div>
                             </div>
-                            <div className="p-6 bg-white/[0.02] rounded-3xl border border-white/5 space-y-1">
-                                <div className="flex items-center gap-2 text-white/30 text-[10px] font-black uppercase tracking-widest">
-                                    <Cpu size={14} className="text-purple-500" />
+                            <div className="p-4 bg-white/[0.01] rounded-2xl border border-white/5 space-y-1 group">
+                                <div className="flex items-center gap-2 text-white/20 text-[9px] font-black uppercase tracking-widest group-hover:text-purple-400/50 transition-colors">
+                                    <Cpu size={12} className="text-purple-500/40" />
                                     Methodology
                                 </div>
-                                <div className="text-2xl font-black text-white capitalize truncate">
-                                    {covResult.detection_method.replace(/_/g, ' ')}
+                                <div className="text-xl font-black text-white/90 capitalize truncate">
+                                    {covResult.detection_method.split('_').slice(0, 2).join(' ')}
                                 </div>
                             </div>
                         </div>
 
                         {/* Verification Notes */}
-                        <div className="glass-card bg-purple-500/5 rounded-[32px] p-8 border-purple-500/20">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white shadow-[0_0_15px_rgba(139,92,246,0.5)]">
-                                    <CheckCircle2 size={16} />
+                        <div className="dark-glass rounded-[24px] p-6 border-purple-500/10">
+                            <div className="flex items-center gap-2.5 mb-3">
+                                <div className="w-7 h-7 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
+                                    <CheckCircle2 size={14} />
                                 </div>
-                                <span className="text-xs font-black tracking-[0.2em] text-purple-400 uppercase">Verification Protocol Notes</span>
+                                <span className="text-[9px] font-black tracking-[0.2em] text-purple-400/60 uppercase">Protocol Verification</span>
                             </div>
-                            <p className="text-sm text-purple-200/50 leading-relaxed font-medium">
+                            <p className="text-[13px] text-white/40 leading-relaxed font-medium">
                                 {covResult.verification_notes}
                             </p>
                         </div>
                     </div>
 
                     {/* Right Side: Evidence or Badge */}
-                    <div className="w-full lg:w-[450px]">
+                    <div className="w-full lg:w-[400px]">
                         {isInference ? (
                             <div className="h-full min-h-[400px] flex flex-col items-center justify-center relative group">
                                 <div className="absolute inset-0 bg-purple-500/10 blur-[100px] group-hover:bg-purple-500/20 transition-all duration-1000" />

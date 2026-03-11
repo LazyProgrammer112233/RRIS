@@ -116,16 +116,16 @@ export default function RRISDashboard() {
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-center mb-12 space-y-6"
+              className="text-center mb-8 space-y-4"
             >
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card text-[10px] font-bold tracking-[0.3em] text-purple-400 uppercase">
-                <Sparkles size={12} />
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass-card text-[9px] font-black tracking-[0.3em] text-purple-400/80 uppercase">
+                <Sparkles size={10} />
                 AI-Powered Audit
               </div>
-              <h1 className="text-7xl font-black tracking-tighter text-white">
+              <h1 className="text-6xl font-black tracking-tighter text-white">
                 RR<span className="text-purple-500">IS</span>
               </h1>
-              <p className="text-white/40 text-sm font-medium max-w-md mx-auto leading-relaxed">
+              <p className="text-white/30 text-xs font-medium max-w-sm mx-auto leading-relaxed">
                 Advanced Refrigeration Intelligence using Gemini Vision
                 & Chain-of-Verification technology.
               </p>
@@ -133,26 +133,26 @@ export default function RRISDashboard() {
           )}
 
           {/* Search Box */}
-          <form onSubmit={handleStartAudit} className="relative group">
-            <div className={`absolute inset-0 bg-purple-600/20 blur-2xl rounded-full transition-opacity duration-500 ${mapsUrl ? 'opacity-100' : 'opacity-0'}`} />
-            <div className="relative glass-card rounded-full p-2 flex items-center purple-glow-sm group-focus-within:purple-glow-lg transition-all border-white/10 group-focus-within:border-purple-500/50">
-              <div className="pl-6 text-white/30 group-focus-within:text-purple-400 transition-colors">
-                <Search size={24} />
+          <form onSubmit={handleStartAudit} className="relative group max-w-2xl mx-auto">
+            <div className={`absolute inset-0 bg-purple-600/10 blur-3xl rounded-full transition-opacity duration-500 ${mapsUrl ? 'opacity-100' : 'opacity-0'}`} />
+            <div className="relative glass-card rounded-2xl p-1.5 flex items-center purple-glow-sm group-focus-within:purple-glow-lg transition-all border-white/5 group-focus-within:border-purple-500/30 overflow-hidden">
+              <div className="pl-5 text-white/20 group-focus-within:text-purple-400/60 transition-colors">
+                <Search size={20} />
               </div>
               <input
                 type="text"
-                placeholder="Secure Google Maps URL..."
+                placeholder="Paste Google Maps URL..."
                 value={mapsUrl}
                 onChange={(e) => setMapsUrl(e.target.value)}
-                className="flex-1 bg-transparent border-none px-6 py-4 text-lg font-medium focus:ring-0 text-white placeholder:text-white/20"
+                className="search-input flex-1 bg-transparent border-none px-4 py-3 text-base font-medium text-white placeholder:text-white/10"
               />
               <button
                 type="submit"
                 disabled={isLoading || !mapsUrl}
-                className="h-14 px-10 bg-gradient-to-tr from-purple-600 to-violet-500 text-white rounded-full font-bold flex items-center gap-2 hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] transition-all disabled:opacity-50 active:scale-95"
+                className="h-11 px-8 bg-gradient-to-tr from-purple-600 to-violet-500 text-white rounded-xl font-bold text-sm flex items-center gap-2 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all disabled:opacity-30 active:scale-95"
               >
-                {isLoading ? <Loader2 className="animate-spin" /> : 'Analyze'}
-                <ArrowRight size={20} />
+                {isLoading ? <Loader2 className="animate-spin size-4" /> : <ArrowRight size={18} />}
+                <span className="hidden sm:inline">Analyze</span>
               </button>
             </div>
           </form>
@@ -212,27 +212,27 @@ export default function RRISDashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="max-w-[1200px] mx-auto px-6 pb-24"
           >
-            <div className="glass-card rounded-[40px] p-10 mb-12 flex flex-col md:flex-row items-center justify-between gap-8 purple-glow-sm">
-              <div className="flex items-center gap-6 text-center md:text-left">
-                <div className="w-16 h-16 rounded-3xl bg-purple-500/10 flex items-center justify-center text-purple-400 border border-purple-500/20">
-                  <Layers size={32} />
+            <div className="glass-card rounded-[32px] p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-6 purple-glow-sm border-white/5">
+              <div className="flex items-center gap-5 text-center md:text-left">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 border border-purple-500/10">
+                  <Layers size={24} />
                 </div>
                 <div>
-                  <h2 className="text-3xl font-black text-white mb-1">Audit Synchronized</h2>
-                  <p className="text-white/40 text-sm font-medium tracking-tight truncate max-w-[300px]">
+                  <h2 className="text-xl font-black text-white leading-tight">Audit Synchronized</h2>
+                  <p className="text-white/30 text-[11px] font-medium tracking-tight truncate max-w-[250px] mt-0.5">
                     {result.store_maps_url}
                   </p>
                 </div>
               </div>
 
-              <div className="flex gap-4">
-                <div className="px-6 py-3 bg-white/5 rounded-2xl border border-white/5 flex flex-col items-center sm:items-start">
-                  <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Store Format</span>
-                  <span className="text-lg font-bold text-purple-400 capitalize">{result.outlet_type}</span>
+              <div className="flex gap-3">
+                <div className="px-4 py-2 bg-white/[0.01] rounded-xl border border-white/5 flex flex-col items-center sm:items-start min-w-[100px]">
+                  <span className="text-[9px] font-black text-white/10 uppercase tracking-widest leading-none mb-1">Store Format</span>
+                  <span className="text-sm font-bold text-purple-400/80 capitalize">{result.outlet_type}</span>
                 </div>
-                <div className="px-6 py-3 bg-white/5 rounded-2xl border border-white/5 flex flex-col items-center sm:items-start">
-                  <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Scan Depth</span>
-                  <span className="text-lg font-bold text-purple-400">{result.total_images_scraped} Views</span>
+                <div className="px-4 py-2 bg-white/[0.01] rounded-xl border border-white/5 flex flex-col items-center sm:items-start min-w-[100px]">
+                  <span className="text-[9px] font-black text-white/10 uppercase tracking-widest leading-none mb-1">Scan Depth</span>
+                  <span className="text-sm font-bold text-purple-400/80">{result.total_images_scraped} Views</span>
                 </div>
               </div>
             </div>
