@@ -27,22 +27,6 @@ async def scrape_google_maps_photos(maps_url, max_photos=10):
     Enhanced Universal Scraper for Google Maps with Stealth Measures.
     Hardened for headless environments (HF Spaces).
     """
-    # Resolve short URLs (maps.app.goo.gl) to full Google Maps URLs
-    # Firebase Dynamic Links require GET + browser UA to redirect
-    if "maps.app.goo.gl" in maps_url or "goo.gl" in maps_url:
-        try:
-            print(f"[Scraper] Resolving short URL: {maps_url}")
-            resp = requests.get(
-                maps_url,
-                allow_redirects=True,
-                timeout=15,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-            )
-            maps_url = resp.url
-            print(f"[Scraper] Resolved to: {maps_url}")
-        except Exception as e:
-            print(f"[Scraper] Short URL resolution failed: {e}")
-    
     async with async_playwright() as p:
         # User-Agent Rotation
         ua = random.choice(USER_AGENTS)
@@ -75,6 +59,25 @@ async def scrape_google_maps_photos(maps_url, max_photos=10):
                 intercepted_images.append(url)
 
         page.on("request", handle_request)
+
+        # Step 0: Resolve short URLs via Playwright navigation + JS redirect
+        if "maps.app.goo.gl" in maps_url or "goo.gl" in maps_url:
+            print(f"[Scraper] Resolving short URL via browser: {maps_url}")
+            try:
+                await page.goto(maps_url, wait_until="commit", timeout=30000)
+                # Wait for JS redirect to kick in (up to 15s)
+                for i in range(15):
+                    await page.wait_for_timeout(1000)
+                    current = page.url
+                    if "google.com/maps" in current or "google.co" in current:
+                        maps_url = current
+                        print(f"[Scraper] Resolved to: {maps_url}")
+                        break
+                else:
+                    print(f"[Scraper] Short URL did not redirect, final URL: {page.url}")
+                    maps_url = page.url
+            except Exception as e:
+                print(f"[Scraper] Short URL resolve error: {e}")
 
         print(f"[Scraper] Navigating to: {maps_url}")
         try:
