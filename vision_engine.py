@@ -51,8 +51,7 @@ def run_cov_audit(image_urls):
         response = model.generate_content(
             parts,
             generation_config={
-                "temperature": 0.1,
-                "response_mime_type": "application/json"
+                "temperature": 0.1
             }
         )
         
