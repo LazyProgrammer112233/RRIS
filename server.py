@@ -26,8 +26,8 @@ print(f"📦 Python: {sys.version}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://rris-frontend.vercel.app",  # Production Vercel URL
-        "http://localhost:3000",               # Local dev
+        "https://rris.vercel.app",      # Production Vercel URL
+        "http://localhost:3000",          # Local dev
     ],
     allow_credentials=True,
     allow_methods=["*"],
