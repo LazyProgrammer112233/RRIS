@@ -211,10 +211,6 @@ export default function RRISDashboard() {
                   </p>
                 </div>
               </div>
-            </motion.div>
-          )}
-        </motion.div>
-      </div>
 
               <div className="glass-card rounded-[24px] p-8 border-white/5 relative overflow-hidden group border-dashed border-white/10 flex flex-col justify-center items-center text-center opacity-50">
                 <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/20 mb-4">
