@@ -25,8 +25,12 @@ stats = {
     "success": 0,
     "insufficient": 0,
     "errors": 0,
+    "skipped": 0,
     "start_time": 0
 }
+
+# Session-based cache for place_id redundancy check
+processed_place_ids = set()
 
 def print_banner():
     print(f"\n{Fore.CYAN}{'='*60}")
@@ -37,31 +41,40 @@ def print_step(step_num, message):
     print(f"{Fore.YELLOW}[Step {step_num}]{Style.RESET_ALL} {message}")
 
 async def process_store(row, image_dir, engine, semaphore, pbar):
-    store_id = str(row['store_id'])
-    store_url = row['store_url']
-    store_location = row['store_location']
+    # Use store_id or place_id if available as unique identifier
+    store_id = str(row.get('place_id', row.get('store_id')))
+    store_url = row.get('store_url', 'N/A')
+    store_location = row.get('store_location', 'N/A')
+    
+    # Redundancy Check
+    if store_id in processed_place_ids:
+        stats["skipped"] += 1
+        pbar.update(1)
+        pbar.set_postfix(succ=stats["success"], err=stats["errors"], skip=stats["insufficient"], dup=stats["skipped"])
+        return None # Signal to skip
+
+    processed_place_ids.add(store_id)
     
     store_folder = os.path.join(image_dir, store_id)
     
-    result_base = {
-        "store_id": store_id,
-        "store_url": store_url,
-        "store_location": store_location,
-        "fridge_detected": "INSUFFICIENT_DATA",
-        "appliance_type": "N/A",
-        "cov_stage": "N/A",
-        "confidence_level": "N/A",
-        "confidence_score": 0.0,
-        "images_scanned": 0,
-        "reasoning": "Folder missing or empty",
-        "analysis_timestamp": datetime.now().isoformat()
-    }
+    # Initialize result with original row data to maintain "Master Analysis" integrity
+    result = row.to_dict()
+    
+    # New Standard Columns
+    result.update({
+        "Count of Assets Detected": 0,
+        "Category of Asset Detected": "N/A",
+        "Number of Photos Analysed": 0,
+        "Outlet Category as Identified": "N/A",
+        "Analysis Status": "INSUFFICIENT_DATA",
+        "Verification Notes": "Folder missing or empty"
+    })
 
     if not os.path.exists(store_folder):
         stats["insufficient"] += 1
         pbar.update(1)
-        pbar.set_postfix(succ=stats["success"], err=stats["errors"], skip=stats["insufficient"])
-        return result_base
+        pbar.set_postfix(succ=stats["success"], err=stats["errors"], skip=stats["insufficient"], dup=stats["skipped"])
+        return result
 
     image_files = [os.path.join(store_folder, f) for f in os.listdir(store_folder) 
                    if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
@@ -69,10 +82,10 @@ async def process_store(row, image_dir, engine, semaphore, pbar):
     if not image_files:
         stats["insufficient"] += 1
         pbar.update(1)
-        pbar.set_postfix(succ=stats["success"], err=stats["errors"], skip=stats["insufficient"])
-        return result_base
+        pbar.set_postfix(succ=stats["success"], err=stats["errors"], skip=stats["insufficient"], dup=stats["skipped"])
+        return result
 
-    result_base["images_scanned"] = len(image_files)
+    result["Number of Photos Analysed"] = len(image_files)
 
     async with semaphore:
         try:
@@ -80,27 +93,27 @@ async def process_store(row, image_dir, engine, semaphore, pbar):
             
             if "error" in analysis:
                 stats["errors"] += 1
-                result_base["fridge_detected"] = "ERROR"
-                result_base["reasoning"] = f"Gemini Error: {analysis['error']}"
+                result["Analysis Status"] = "ERROR"
+                result["Verification Notes"] = f"Gemini Error: {analysis['error']}"
             else:
                 stats["success"] += 1
-                result_base.update({
-                    "fridge_detected": "YES" if analysis.get("contains_fridge") else "NO",
-                    "appliance_type": analysis.get("outlet_type", "N/A"),
-                    "cov_stage": analysis.get("detection_method", "N/A"),
-                    "confidence_level": analysis.get("confidence", "N/A"),
-                    "confidence_score": 0.9 if analysis.get("confidence") == "high" else (0.6 if analysis.get("confidence") == "medium" else 0.3),
-                    "reasoning": (analysis.get("reason", "N/A") + " | " + analysis.get("verification_notes", "")).strip(" | "),
+                result.update({
+                    "Analysis Status": "SUCCESS",
+                    "Count of Assets Detected": analysis.get("asset_count", 0),
+                    "Category of Asset Detected": analysis.get("asset_breakdown", "None"),
+                    "Outlet Category as Identified": analysis.get("outlet_category", "N/A"),
+                    "Verification Notes": (analysis.get("reason", "") + " | " + analysis.get("verification_notes", "")).strip(" | "),
+                    "Confidence": analysis.get("confidence", "N/A")
                 })
         except Exception as e:
             stats["errors"] += 1
-            result_base["fridge_detected"] = "ERROR"
-            result_base["reasoning"] = f"Runtime Error: {str(e)}"
+            result["Analysis Status"] = "ERROR"
+            result["Verification Notes"] = f"Runtime Error: {str(e)}"
         
         pbar.update(1)
         # Update progress bar with live stats
         elapsed = time.time() - stats["start_time"]
-        processed = stats["success"] + stats["errors"] + stats["insufficient"]
+        processed = stats["success"] + stats["errors"] + stats["insufficient"] + stats["skipped"]
         if processed > 0:
             avg_time = elapsed / processed
             rem_stores = stats["total"] - processed
@@ -108,8 +121,8 @@ async def process_store(row, image_dir, engine, semaphore, pbar):
             eta_str = str(timedelta(seconds=int(eta_seconds)))
             pbar.set_description(f"Processing (ETA: {eta_str})")
         
-        pbar.set_postfix(succ=stats["success"], err=stats["errors"], skip=stats["insufficient"])
-        return result_base
+        pbar.set_postfix(succ=stats["success"], err=stats["errors"], skip=stats["insufficient"], dup=stats["skipped"])
+        return result
 
 async def main():
     print_banner()
@@ -180,16 +193,33 @@ async def main():
         results = await asyncio.gather(*tasks)
 
     # Step 6: Finalization
-    print_step(6, "Finalizing and Exporting Data...")
-    output_path = os.path.join(output_dir, f"rris_bulk_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-    results_df = pd.DataFrame(results)
-    results_df.to_csv(output_path, index=False)
+    print_step(6, "Finalizing Master Analysis CSV...")
+    # Filter out None results from skipped stores
+    valid_results = [r for r in results if r is not None]
+    
+    output_path = os.path.join(output_dir, f"RRIS_Master_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    results_df = pd.DataFrame(valid_results)
+    
+    # Ensure specific column order for delivery
+    standard_cols = [
+        "place_id", "store_id", "store_url", "store_location", 
+        "Count of Assets Detected", "Category of Asset Detected", 
+        "Number of Photos Analysed", "Outlet Category as Identified",
+        "Analysis Status", "Confidence", "Verification Notes"
+    ]
+    
+    # Include any other original columns that might be present
+    all_cols = list(results_df.columns)
+    ordered_cols = [c for c in standard_cols if c in all_cols] + [c for c in all_cols if c not in standard_cols]
+    
+    results_df[ordered_cols].to_csv(output_path, index=False)
 
     print(f"\n{Fore.CYAN}{'='*60}")
     print(f"{Fore.GREEN}  MISSION SUCCESS: Analysis Complete!")
     print(f"{Fore.CYAN}{'='*60}")
-    print(f"  {Fore.WHITE}Total Stores:       {stats['total']}")
+    print(f"  {Fore.WHITE}Total Stores Queued: {stats['total']}")
     print(f"  {Fore.GREEN}Success Detections: {stats['success']}")
+    print(f"  {Fore.BLUE}Skipped (Redundant): {stats['skipped']}")
     print(f"  {Fore.YELLOW}Insufficient Data:  {stats['insufficient']}")
     print(f"  {Fore.RED}System Errors:      {stats['errors']}")
     print(f"  {Fore.WHITE}Output Location:    {output_path}")
