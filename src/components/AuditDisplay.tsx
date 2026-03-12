@@ -12,6 +12,8 @@ interface CoVResult {
     evidence_image: string | null;
     confidence: 'high' | 'medium' | 'low';
     verification_notes: string;
+    appliance_types?: string[];
+    asset_count?: number;
 }
 
 interface AuditDisplayProps {
@@ -58,7 +60,7 @@ export default function AuditDisplay({ covResult }: AuditDisplayProps) {
                         </div>
 
                         {/* Intelligence Metrics */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             <div className="p-4 bg-white/[0.01] rounded-2xl border border-white/5 space-y-1 group">
                                 <div className="flex items-center gap-2 text-white/20 text-[9px] font-black uppercase tracking-widest group-hover:text-purple-400/50 transition-colors">
                                     <Target size={12} className="text-purple-500/40" />
@@ -73,6 +75,24 @@ export default function AuditDisplay({ covResult }: AuditDisplayProps) {
                                 </div>
                                 <div className="text-xl font-black text-white/90 capitalize truncate">
                                     {covResult.detection_method.split('_').slice(0, 2).join(' ')}
+                                </div>
+                            </div>
+                            <div className="p-4 bg-white/[0.01] rounded-2xl border border-white/5 space-y-1 group">
+                                <div className="flex items-center gap-2 text-white/20 text-[9px] font-black uppercase tracking-widest group-hover:text-purple-400/50 transition-colors">
+                                    <Search size={12} className="text-purple-500/40" />
+                                    Assets
+                                </div>
+                                <div className="text-xl font-black text-white/90 truncate">
+                                    {covResult.asset_count ?? 'N/A'}
+                                </div>
+                            </div>
+                            <div className="p-4 bg-white/[0.01] rounded-2xl border border-white/5 space-y-1 group">
+                                <div className="flex items-center gap-2 text-white/20 text-[9px] font-black uppercase tracking-widest group-hover:text-purple-400/50 transition-colors">
+                                    <Info size={12} className="text-purple-500/40" />
+                                    Categories
+                                </div>
+                                <div className="text-[11px] font-bold text-white/70 leading-tight h-8 overflow-hidden line-clamp-2">
+                                    {covResult.appliance_types?.join(', ') || 'None'}
                                 </div>
                             </div>
                         </div>

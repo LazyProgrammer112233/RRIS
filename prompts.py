@@ -43,6 +43,8 @@ Respond with ONLY a JSON object in this exact schema:
   "contains_fridge": boolean,
   "detection_method": "store_type_inference" | "visual_detection",
   "outlet_type": "supermarket" | "hypermarket" | "kirana / small retail" | "uncertain",
+  "appliance_types": string[], // e.g. ["visi cooler", "chest freezer"]
+  "asset_count": number,
   "reason": string,
   "evidence_image": string | null,
   "confidence": "high" | "medium" | "low",

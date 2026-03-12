@@ -44,92 +44,82 @@ async def _resolve_short_url(maps_url: str) -> str:
     return maps_url
 
 
-async def scrape_google_maps_photos(maps_url, max_photos=10):
+async def get_place_details(place_id: str):
+    """Fetches detailed place information from Google Places API."""
+    gmaps = get_maps_client()
+    try:
+        details = gmaps.place(
+            place_id=place_id, 
+            fields=["name", "type", "formatted_address", "geometry", "rating", "user_ratings_total", "photo"]
+        )
+        return details.get("result", {})
+    except Exception as e:
+        print(f"[Scraper] Error fetching place details for {place_id}: {e}")
+        return {}
+
+async def scrape_google_maps_photos(maps_url=None, place_id=None, max_photos=10):
     """
-    Scrapes Google Maps photos using the official Google Places API.
-    This replaces the Playwright scraper to bypass HF headless browser blocking.
+    Scrapes Google Maps photos and details using Place ID or URL.
     """
     gmaps = get_maps_client()
     
-    # 1. Expand the URL if needed
-    current_url = await _resolve_short_url(maps_url)
-    
-    # 2. Extract Place ID if present in the URL (ChIJ...)
-    place_id = None
-    ch_match = re.search(r'place_id=(ChI[a-zA-Z0-9_\-]+)', current_url)
-    if ch_match:
-        place_id = ch_match.group(1)
-        print(f"[Scraper] Extracted Place ID from URL: {place_id}")
-    
-    # 3. If no Place ID, try to extract name and coords for a Text Search
-    if not place_id:
-        name_match = re.search(r'/place/([^/]+)/', current_url)
-        coord_match = re.search(r'@(-?\d+\.\d+),(-?\d+\.\d+)', current_url)
+    # 1. If no Place ID, extract it from URL
+    if not place_id and maps_url:
+        current_url = await _resolve_short_url(maps_url)
+        ch_match = re.search(r'place_id=(ChI[a-zA-Z0-9_\-]+)', current_url)
+        if ch_match:
+            place_id = ch_match.group(1)
         
-        if name_match:
-            try:
-                import urllib.parse
-                name = urllib.parse.unquote(name_match.group(1)).replace("+", " ")
-                print(f"[Scraper] Extracted store name for search: {name}")
-                
-                location = None
-                if coord_match:
-                     location = (float(coord_match.group(1)), float(coord_match.group(2)))
-                     print(f"[Scraper] Using location bias: {location}")
+        if not place_id:
+            name_match = re.search(r'/place/([^/]+)/', current_url)
+            coord_match = re.search(r'@(-?\d+\.\d+),(-?\d+\.\d+)', current_url)
+            if name_match:
+                try:
+                    import urllib.parse
+                    name = urllib.parse.unquote(name_match.group(1)).replace("+", " ")
+                    location = None
+                    if coord_match:
+                         location = (float(coord_match.group(1)), float(coord_match.group(2)))
+                    search_res = gmaps.places(query=name, location=location, radius=100 if location else None)
+                    if search_res and search_res.get("results"):
+                        place_id = search_res["results"][0]["place_id"]
+                except Exception: pass
 
-                # Use Places API Text Search
-                search_res = gmaps.places(query=name, location=location, radius=100 if location else None)
-                if search_res and search_res.get("results"):
-                    place_id = search_res["results"][0]["place_id"]
-                    print(f"[Scraper] Found Place ID via Text Search: {place_id}")
-                else:
-                    print("[Scraper] Text Search returned no results.")
-            except Exception as e:
-                 print(f"[Scraper] Text Search failed: {e}")
-                 
     if not place_id:
-         print("[Scraper] Could not determine Place ID from URL.")
-         return []
+         print("[Scraper] Could not determine Place ID.")
+         return [], {}
 
-    # 4. Fetch Place Details (Photos)
+    # 4. Fetch Place Details
     print(f"[Scraper] Fetching details for Place ID: {place_id}")
-    try:
-        details = gmaps.place(place_id=place_id, fields=["name", "photo"])
-        result = details.get("result", {})
-        
-        if not result or "photos" not in result:
-             print("[Scraper] No photos found for this location.")
-             return []
-             
-        photos = result["photos"]
-        print(f"[Scraper] Found {len(photos)} photos in Google Places.")
-        
-        # 5. Build high-res photo URLs Using the Places API Photo Endpoint
-        high_res_urls = []
-        api_key = os.environ.get("GOOGLE_PLACES_API_KEY")
-        for i, photo in enumerate(photos):
-             if i >= max_photos:
-                  break
-             photo_ref = photo["photo_reference"]
-             # The URL directly to the Image (Google handles the redirect to lh3.googleusercontent)
-             photo_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photo_reference={photo_ref}&key={api_key}"
-             high_res_urls.append(photo_url)
-             
-        print(f"[Scraper] Built {len(high_res_urls)} high-res photo URLs via API.")
-        return high_res_urls
-        
-    except Exception as e:
-         print(f"[Scraper] Place Details fetching failed: {e}")
-         return []
+    result = await get_place_details(place_id)
+    
+    if not result:
+         return [], {}
+         
+    photos = result.get("photos", [])
+    print(f"[Scraper] Found {len(photos)} photos.")
+    
+    # 5. Build high-res photo URLs
+    high_res_urls = []
+    api_key = os.environ.get("GOOGLE_PLACES_API_KEY")
+    for i, photo in enumerate(photos):
+         if i >= max_photos:
+              break
+         photo_ref = photo["photo_reference"]
+         photo_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photo_reference={photo_ref}&key={api_key}"
+         high_res_urls.append(photo_url)
+         
+    return high_res_urls, result
 
 if __name__ == "__main__":
     import sys
     from dotenv import load_dotenv
-    load_dotenv(".env.local") # Load for local testing
+    load_dotenv(".env.local")
     test_url = "https://www.google.com/maps/place/Reliance+Fresh/@19.0760,72.8777,15z"
     if len(sys.argv) > 1:
         test_url = sys.argv[1]
         
-    urls = asyncio.run(scrape_google_maps_photos(test_url))
+    urls, details = asyncio.run(scrape_google_maps_photos(test_url))
+    print(f"Store Name: {details.get('name')}")
     for i, url in enumerate(urls):
         print(f"{i+1}: {url}")

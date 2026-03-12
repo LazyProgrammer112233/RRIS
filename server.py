@@ -68,6 +68,10 @@ async def health_check():
 # InMemoryTaskManager (Thread-Safe)
 # ============================================================
 
+import csv
+import io
+from fastapi.responses import StreamingResponse
+
 class InMemoryTaskManager:
     """Thread-safe in-memory task store with auto-expiry."""
     
@@ -75,39 +79,46 @@ class InMemoryTaskManager:
         self._tasks: dict = {}
         self._lock = threading.Lock()
         self._expiry_hours = expiry_hours
-        # Start background purge thread
         self._purge_thread = threading.Thread(target=self._purge_loop, daemon=True)
         self._purge_thread.start()
         print("🧹 Task Purge Thread Started (1-hour expiry).")
     
-    def create(self, task_id: str, url: str) -> dict:
+    def create(self, task_id: str, url: str = None, place_ids: list = None) -> dict:
         with self._lock:
             task = {
                 "task_id": task_id,
                 "url": url,
+                "place_ids": place_ids,
                 "status": "PENDING",
+                "progress": 0,
+                "total": len(place_ids) if place_ids else 1,
                 "result": None,
+                "bulk_results": [],
                 "created_at": datetime.now().isoformat()
             }
             self._tasks[task_id] = task
             return task
     
-    def update(self, task_id: str, status: str, result: dict = None):
+    def update(self, task_id: str, status: str, result: dict = None, progress: int = None, bulk_item: dict = None):
         with self._lock:
             if task_id in self._tasks:
                 self._tasks[task_id]["status"] = status
                 if result is not None:
                     self._tasks[task_id]["result"] = result
+                if progress is not None:
+                    self._tasks[task_id]["progress"] = progress
+                if bulk_item is not None:
+                    self._tasks[task_id]["bulk_results"].append(bulk_item)
     
     def get(self, task_id: str) -> dict | None:
         with self._lock:
             return self._tasks.get(task_id)
-    
+            
     def _purge_loop(self):
         """Background loop that purges old completed/failed tasks every 5 minutes."""
         import time
         while True:
-            time.sleep(300)  # Check every 5 minutes
+            time.sleep(300)
             cutoff = datetime.now() - timedelta(hours=self._expiry_hours)
             with self._lock:
                 to_delete = [
@@ -130,10 +141,15 @@ task_manager = InMemoryTaskManager(expiry_hours=1)
 class AuditRequest(BaseModel):
     maps_url: str
 
+class BulkAuditRequest(BaseModel):
+    place_ids: list[str]
+
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
     result: dict = None
+    progress: int = 0
+    total: int = 1
     created_at: str
 
 # ============================================================
@@ -143,42 +159,115 @@ class TaskStatusResponse(BaseModel):
 async def background_audit(task_id: str, maps_url: str):
     """Run the full audit pipeline in the background."""
     task_manager.update(task_id, "RUNNING")
-    
     try:
         from main import run_audit
-        # run_audit now returns the report dict directly and raises exceptions on fail
-        audit_result = await run_audit(maps_url)
-        
+        audit_result = await run_audit(maps_url=maps_url)
         if audit_result:
             task_manager.update(task_id, "COMPLETED", audit_result)
         else:
-            task_manager.update(task_id, "FAILED", {"error": "Audit returned empty result without exception."})
-            
+            task_manager.update(task_id, "FAILED", {"error": "Audit returned empty result."})
     except Exception as e:
-        print(f"❌ Audit Error for {task_id}: {e}")
         task_manager.update(task_id, "FAILED", {"error": str(e)})
+
+async def background_bulk_audit(task_id: str, place_ids: list):
+    """Run bulk Place ID audits in the background."""
+    task_manager.update(task_id, "RUNNING")
+    from main import run_audit
+    from scraper import get_place_details
+    
+    for i, pid in enumerate(place_ids):
+        try:
+            details = await get_place_details(pid)
+            is_large = False
+            large_keywords = {"supermarket", "hypermarket", "department_store", "grocery_or_supermarket"}
+            if details and any(k in details.get("types", []) for k in large_keywords):
+                is_large = True
+            
+            if is_large:
+                item_result = {
+                    "place_id": pid,
+                    "name": details.get("name", "N/A"),
+                    "outlet_type": "supermarket",
+                    "supermarket_check": "YES",
+                    "appliance_types": "Assume Cooling Assets (Superstore)",
+                    "asset_count": "N/A",
+                    "location": details.get("formatted_address", "N/A"),
+                    "verification_notes": "Outlet seems to be a Supermarket / superstore / large outlet",
+                    "lat": details.get("geometry", {}).get("location", {}).get("lat"),
+                    "lng": details.get("geometry", {}).get("location", {}).get("lng"),
+                    "rating": details.get("rating"),
+                    "reviews": details.get("user_ratings_total")
+                }
+            else:
+                audit = await run_audit(place_id=pid)
+                item_result = {
+                    "place_id": pid,
+                    "name": details.get("name", "N/A"),
+                    "outlet_type": audit.get("outlet_type", "N/A"),
+                    "supermarket_check": "NO",
+                    "appliance_types": ", ".join(audit.get("appliance_types", [])) if isinstance(audit.get("appliance_types"), list) else audit.get("appliance_types", "N/A"),
+                    "asset_count": audit.get("asset_count", 0),
+                    "location": details.get("formatted_address", "N/A"),
+                    "verification_notes": audit.get("verification_notes", "N/A"),
+                    "lat": details.get("geometry", {}).get("location", {}).get("lat"),
+                    "lng": details.get("geometry", {}).get("location", {}).get("lng"),
+                    "rating": details.get("rating"),
+                    "reviews": details.get("user_ratings_total")
+                }
+            task_manager.update(task_id, "RUNNING", progress=i+1, bulk_item=item_result)
+        except Exception as e:
+            print(f"Error processing {pid}: {e}")
+            task_manager.update(task_id, "RUNNING", progress=i+1, bulk_item={"place_id": pid, "error": str(e)})
+
+    task_manager.update(task_id, "COMPLETED")
 
 @app.post("/audit", response_model=dict)
 async def start_audit(request: AuditRequest, background_tasks: BackgroundTasks):
-    """Start a new audit task."""
     task_id = str(uuid.uuid4())
-    task = task_manager.create(task_id, request.maps_url)
-    
+    task_manager.create(task_id, url=request.maps_url)
     background_tasks.add_task(background_audit, task_id, request.maps_url)
-    
+    return {"task_id": task_id, "status": "PENDING"}
+
+@app.post("/audit-bulk-ids")
+async def start_bulk_audit(request: BulkAuditRequest, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    task_manager.create(task_id, place_ids=request.place_ids)
+    background_tasks.add_task(background_bulk_audit, task_id, request.place_ids)
     return {"task_id": task_id, "status": "PENDING"}
 
 @app.get("/status/{task_id}")
 async def get_task_status(task_id: str):
-    """Check the status of an audit task."""
     task = task_manager.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
+@app.get("/download-csv/{task_id}")
+async def download_csv(task_id: str):
+    task = task_manager.get(task_id)
+    if not task or not task.get("bulk_results"):
+        raise HTTPException(status_code=404, detail="Task not found or results not ready")
+    
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=[
+        "place_id", "name", "outlet_type", "supermarket_check", 
+        "appliance_types", "location", "asset_count", "verification_notes", 
+        "lat", "lng", "rating", "reviews"
+    ])
+    writer.writeheader()
+    for row in task["bulk_results"]:
+        clean_row = {k: row.get(k, "N/A") for k in writer.fieldnames}
+        writer.writerow(clean_row)
+    
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=rris_bulk_audit_{task_id}.csv"}
+    )
+
 @app.post("/sync-sheets")
 async def sync_sheets():
-    """Manually sync the latest audit report to Google Sheets."""
     try:
         from google_sheets import export_to_sheets
         if os.path.exists("audit_report.json"):

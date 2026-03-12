@@ -7,35 +7,47 @@ from vision_engine import run_cov_audit
 
 load_dotenv(".env.local") if os.path.exists(".env.local") else load_dotenv()
 
-async def run_audit(maps_url):
-    print(f"[Audit] Starting Advanced CoV Audit for: {maps_url}")
+async def run_audit(maps_url=None, place_id=None):
+    print(f"[Audit] Starting Advanced CoV Audit for: {maps_url or place_id}")
     
-    # Step 1: Scrape Photo URLs
+    # Step 1: Scrape Photos and Details
     try:
-        photo_urls = await scrape_google_maps_photos(maps_url, max_photos=5)
-        if not photo_urls:
-            raise RuntimeError("Scraper extracted 0 images. Verify the Google Maps URL corresponds to a valid store listing.")
-        print(f"[Scraper] Found {len(photo_urls)} high-res photos.")
+        photo_urls, details = await scrape_google_maps_photos(maps_url=maps_url, place_id=place_id, max_photos=10)
+        if not photo_urls and not details:
+            raise RuntimeError("Scraper returned no data. Verify the Google Maps URL or Place ID.")
+        print(f"[Scraper] Found {len(photo_urls)} high-res photos for {details.get('name', 'N/A')}.")
     except Exception as e:
         print(f"[Scraper] Error: {e}")
         raise RuntimeError(f"Audit failed during image extraction: {str(e)}")
 
     # Step 2: Run Two-Stage CoV Audit
     try:
-        report_output = run_cov_audit(photo_urls)
+        # If no photos, we can't do vision audit, but details might still be useful
+        if not photo_urls:
+            report_output = {
+                "contains_fridge": False,
+                "detection_method": "no_images",
+                "outlet_type": "uncertain",
+                "reason": "No images available for analysis.",
+                "confidence": "low",
+                "verification_notes": "Scraper found 0 images."
+            }
+        else:
+            report_output = run_cov_audit(photo_urls)
+            
         report_output["store_maps_url"] = maps_url
+        report_output["place_id"] = place_id or details.get("place_id")
         report_output["total_images_scraped"] = len(photo_urls)
+        report_output["place_details"] = details
         
         if "error" in report_output:
             raise RuntimeError(f"Vision Engine reported error: {report_output['error']}")
 
         print(f"\n--- CoV Audit Result ---")
+        print(f"Outlet Name: {details.get('name')}")
         print(f"Outlet Type: {report_output.get('outlet_type')}")
         print(f"Contains Fridge: {report_output.get('contains_fridge')}")
-        print(f"Method: {report_output.get('detection_method')}")
-        print(f"Confidence: {report_output.get('confidence')}")
 
-        # Optional: Save a local copy for debug, but return the dict
         try:
             with open("audit_report.json", "w", encoding="utf-8") as f:
                 json.dump(report_output, f, indent=4)
