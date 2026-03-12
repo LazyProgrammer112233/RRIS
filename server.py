@@ -66,7 +66,7 @@ async def root():
 @app.get("/health")
 async def health_check():
     """HF Spaces health check — must return 200 OK fast."""
-    return {"status": "ready", "memory_limit": "16GB"}
+    return {"status": "ready", "memory_limit": "16GB", "version": "2026-03-12T20:21:00"}
 
 # ============================================================
 # InMemoryTaskManager (Thread-Safe)
