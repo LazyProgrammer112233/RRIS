@@ -56,15 +56,16 @@ Only count detections that pass ALL verification checks.
 - Use uniform naming conventions for all asset types.
 - Always show your reasoning in verification_notes.
 
-## Output
-Respond with ONLY a JSON object in this exact schema:
+## Output Requirements (STRICT)
+Respond with ONLY a JSON object. Do NOT include any text outside the JSON.
+The JSON must follow this schema:
 {
   "contains_fridge": boolean,
   "outlet_type": "supermarket" | "hypermarket" | "kirana / small retail" | "uncertain",
-  "store_category": string, (e.g., "pharma store", "supermarket", "general trade kirana", "modern trade store")
-  "asset_count": integer, (Total number of cooling and branding units identified)
-  "appliance_types": string, (STRICTLY a comma-separated list of unique asset types found, example: "visi cooler, chest freezer", use "None" if none found)
-  "asset_breakdown": string, (Detailed breakdown for reasoning, e.g., "1 Double Door Visi Cooler, 2 Sliding Glass Chest Freezers")
+  "store_category": string, (STRICTLY the type of store predicted, e.g., "pharma store", "supermarket", "kirana store", "departmental store")
+  "asset_count": integer, (Total count of cooling/branding units)
+  "appliance_types": string, (STRICTLY a comma-separated list of EXACT asset categories found. Do NOT put store types here. Example: "visi cooler, chest freezer, beverage chiller")
+  "asset_breakdown": string, (Detailed count and type breakdown, e.g., "2 Double Door Visi Coolers, 1 Hard Top Chest Freezer")
   "confidence": "high" | "medium" | "low",
   "reason": string,
   "verification_notes": string
