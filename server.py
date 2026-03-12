@@ -59,6 +59,10 @@ async def verify_secret(request: Request, call_next):
     return await call_next(request)
 
 # === Health Endpoint (HF Spec) ===
+@app.get("/")
+async def root():
+    return {"message": "RRIS Engine API is running"}
+
 @app.get("/health")
 async def health_check():
     """HF Spaces health check — must return 200 OK fast."""
