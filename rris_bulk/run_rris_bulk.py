@@ -62,6 +62,9 @@ async def process_store(row, image_dir, engine, semaphore, pbar):
     
     # New Standard Columns
     result.update({
+        "cd_detected": "INSUFFICIENT_DATA",
+        "appliance_type": "N/A",
+        "store_category": "N/A",
         "Count of Assets Detected": 0,
         "Category of Asset Detected": "N/A",
         "Number of Photos Analysed": 0,
@@ -99,9 +102,12 @@ async def process_store(row, image_dir, engine, semaphore, pbar):
                 stats["success"] += 1
                 result.update({
                     "Analysis Status": "SUCCESS",
+                    "cd_detected": "YES" if analysis.get("contains_fridge") else "NO",
+                    "appliance_type": analysis.get("appliance_types", "None"),
+                    "store_category": analysis.get("store_category", "N/A"),
                     "Count of Assets Detected": analysis.get("asset_count", 0),
                     "Category of Asset Detected": analysis.get("asset_breakdown", "None"),
-                    "Outlet Category as Identified": analysis.get("outlet_category", "N/A"),
+                    "Outlet Category as Identified": analysis.get("outlet_type", "N/A"),
                     "Verification Notes": (analysis.get("reason", "") + " | " + analysis.get("verification_notes", "")).strip(" | "),
                     "Confidence": analysis.get("confidence", "N/A")
                 })
@@ -203,6 +209,7 @@ async def main():
     # Ensure specific column order for delivery
     standard_cols = [
         "place_id", "store_id", "store_url", "store_location", 
+        "cd_detected", "appliance_type", "store_category",
         "Count of Assets Detected", "Category of Asset Detected", 
         "Number of Photos Analysed", "Outlet Category as Identified",
         "Analysis Status", "Confidence", "Verification Notes"

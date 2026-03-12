@@ -61,9 +61,10 @@ Respond with ONLY a JSON object in this exact schema:
 {
   "contains_fridge": boolean,
   "outlet_type": "supermarket" | "hypermarket" | "kirana / small retail" | "uncertain",
-  "outlet_category": string, (e.g., "High-Volume Modern Trade", "General Trade Kirana", "Premium Pharmacy")
+  "store_category": string, (e.g., "pharma store", "supermarket", "general trade kirana", "modern trade store")
   "asset_count": integer, (Total number of cooling and branding units identified)
-  "asset_breakdown": string, (e.g., "1 Double Door Visi Cooler, 2 Sliding Glass Chest Freezers", use "None" if none found)
+  "appliance_types": string, (STRICTLY a comma-separated list of unique asset types found, example: "visi cooler, chest freezer", use "None" if none found)
+  "asset_breakdown": string, (Detailed breakdown for reasoning, e.g., "1 Double Door Visi Cooler, 2 Sliding Glass Chest Freezers")
   "confidence": "high" | "medium" | "low",
   "reason": string,
   "verification_notes": string
