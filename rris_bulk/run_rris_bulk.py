@@ -41,21 +41,38 @@ def print_step(step_num, message):
     print(f"{Fore.YELLOW}[Step {step_num}]{Style.RESET_ALL} {message}")
 
 async def process_store(row, image_dir, engine, semaphore, pbar):
-    # Use store_id or place_id if available as unique identifier
-    store_id = str(row.get('place_id', row.get('store_id')))
-    store_url = row.get('store_url', 'N/A')
-    store_location = row.get('store_location', 'N/A')
+    # Robust Folder Detection
+    place_id = str(row.get('place_id', ''))
+    store_id_val = str(row.get('store_id', ''))
+    
+    # Priority 1: place_id folder
+    # Priority 2: store_id folder
+    store_folder = None
+    search_dirs = []
+    
+    if place_id:
+        p_folder = os.path.join(image_dir, place_id)
+        search_dirs.append(place_id)
+        if os.path.exists(p_folder):
+            store_folder = p_folder
+            
+    if not store_folder and store_id_val:
+        s_folder = os.path.join(image_dir, store_id_val)
+        search_dirs.append(store_id_val)
+        if os.path.exists(s_folder):
+            store_folder = s_folder
+    
+    # Unique identifier for redundancy check (prefer place_id)
+    unique_id = place_id if place_id else store_id_val
     
     # Redundancy Check
-    if store_id in processed_place_ids:
+    if unique_id in processed_place_ids:
         stats["skipped"] += 1
         pbar.update(1)
         pbar.set_postfix(succ=stats["success"], err=stats["errors"], skip=stats["insufficient"], dup=stats["skipped"])
         return None # Signal to skip
 
-    processed_place_ids.add(store_id)
-    
-    store_folder = os.path.join(image_dir, store_id)
+    processed_place_ids.add(unique_id)
     
     # Initialize result with original row data to maintain "Master Analysis" integrity
     result = row.to_dict()
@@ -70,10 +87,10 @@ async def process_store(row, image_dir, engine, semaphore, pbar):
         "Number of Photos Analysed": 0,
         "Outlet Category as Identified": "N/A",
         "Analysis Status": "INSUFFICIENT_DATA",
-        "Verification Notes": "Folder missing or empty"
+        "Verification Notes": f"Folder missing or empty. Looked for: {', '.join(search_dirs)}"
     })
 
-    if not os.path.exists(store_folder):
+    if not store_folder:
         stats["insufficient"] += 1
         pbar.update(1)
         pbar.set_postfix(succ=stats["success"], err=stats["errors"], skip=stats["insufficient"], dup=stats["skipped"])
