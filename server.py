@@ -42,7 +42,7 @@ print(f"🔐 APP_SECRET loaded: {'YES (' + str(len(APP_SECRET)) + ' chars)' if A
 async def verify_secret(request: Request, call_next):
     """Intercept all requests except /health and preflight OPTIONS."""
     # Allow health check, docs, and CORS preflight through
-    exempt_paths = {"/health", "/docs", "/openapi.json", "/favicon.ico"}
+    exempt_paths = {"/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/audit-bulk-ids"}
     if request.url.path in exempt_paths or request.method == "OPTIONS":
         return await call_next(request)
     
