@@ -115,11 +115,16 @@ if __name__ == "__main__":
     import sys
     from dotenv import load_dotenv
     load_dotenv(".env.local")
-    test_url = "https://www.google.com/maps/place/Reliance+Fresh/@19.0760,72.8777,15z"
+    test_input = "https://www.google.com/maps/place/Reliance+Fresh/@19.0760,72.8777,15z"
     if len(sys.argv) > 1:
-        test_url = sys.argv[1]
+        test_input = sys.argv[1]
         
-    urls, details = asyncio.run(scrape_google_maps_photos(test_url))
+    if test_input.startswith("ChIJ"):
+        print(f"Testing with Place ID: {test_input}")
+        urls, details = asyncio.run(scrape_google_maps_photos(place_id=test_input))
+    else:
+        print(f"Testing with URL: {test_input}")
+        urls, details = asyncio.run(scrape_google_maps_photos(maps_url=test_input))
     print(f"Store Name: {details.get('name')}")
     for i, url in enumerate(urls):
         print(f"{i+1}: {url}")
