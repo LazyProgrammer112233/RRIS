@@ -43,7 +43,7 @@ async def verify_secret(request: Request, call_next):
     """Intercept all requests except /health and preflight OPTIONS."""
     # Allow health check, docs, and CORS preflight through
     exempt_paths = {"/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/audit-bulk-ids"}
-    if request.url.path in exempt_paths or request.method == "OPTIONS":
+    if request.url.path in exempt_paths or request.url.path.startswith("/download-csv") or request.method == "OPTIONS":
         return await call_next(request)
     
     # If APP_SECRET is not configured, skip enforcement (allow all)
