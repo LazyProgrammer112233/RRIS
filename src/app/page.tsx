@@ -206,9 +206,17 @@ export default function RRISDashboard() {
                     <Zap size={20} />
                   </div>
                   <h3 className="text-xl font-bold text-white mb-2">Bulk Results Export</h3>
-                  <p className="text-white/40 text-sm leading-relaxed mb-8">
+                  <p className="text-white/40 text-sm leading-relaxed mb-6">
                     Processing 10 images per outlet. Supermarkets are auto-skipped with cooling assumptions.
                   </p>
+                  <a
+                    href="/rris_bulk_worker.zip"
+                    download
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white/80 hover:text-white hover:border-purple-500/50 hover:bg-purple-500/10 transition-all"
+                  >
+                    <Download size={14} className="text-purple-400" />
+                    Download Update Script
+                  </a>
                 </div>
               </div>
 
