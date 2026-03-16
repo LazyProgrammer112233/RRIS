@@ -158,6 +158,8 @@ async def main():
     load_dotenv(env_path)
     
     api_key = os.getenv("GEMINI_API_KEY")
+    clip_api_key = os.getenv("VISION_MODEL_API_KEY") # Use Hugging Face key for CLIP
+    
     if not api_key:
         print(f"{Fore.MAGENTA}No API Key found in .env{Style.RESET_ALL}")
         api_key = input("  > Enter your Gemini API Key: ").strip()
@@ -196,7 +198,7 @@ async def main():
 
     # Step 4: Initialization
     print_step(4, "Initializing AI Core & Concurrency...")
-    engine = RRISEngine(api_key)
+    engine = RRISEngine(api_key, clip_api_key)
     max_concurrency = config.get('max_concurrent_requests', 15)
     semaphore = asyncio.Semaphore(max_concurrency)
     print(f"  [i] Target Concurrency: {max_concurrency} parallel streams.")

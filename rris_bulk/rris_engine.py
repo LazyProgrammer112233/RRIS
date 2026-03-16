@@ -6,84 +6,153 @@ import google.generativeai as genai
 from PIL import Image
 import yaml
 
+import yaml
+import requests
+import base64
+from io import BytesIO
+
 # Load config
 with open(os.path.join(os.path.dirname(__file__), "config.yaml"), 'r') as f:
     config = yaml.safe_load(f)
 
+# Hugging Face CLIP Configuration
+CLIP_API_URL = "https://router.huggingface.co/hf-inference/models/openai/clip-vit-base-patch32"
+# Labels for zero-shot classification
+CLIP_OUTLET_LABELS = [
+    "a photo of a supermarket or hypermarket with many aisles",
+    "a photo of a small kirana store or traditional retail shop",
+    "a photo of a pharmacy or medical store",
+    "a photo of a restaurant or cafe",
+    "a photo of a street view or non-commercial building",
+    "a photo of a clear refrigeration cooling device (fridge/freezer)",
+    "a photo that is blurry, dark, or unidentifiable"
+]
+
+CLIP_LABEL_MAP = {
+    "a photo of a supermarket or hypermarket with many aisles": "supermarket",
+    "a photo of a small kirana store or traditional retail shop": "kirana / small retail",
+    "a photo of a pharmacy or medical store": "pharma store",
+    "a photo of a restaurant or cafe": "restaurant/cafe",
+    "a photo of a street view or non-commercial building": "non-commercial",
+    "a photo of a clear refrigeration cooling device (fridge/freezer)": "cooler_detected",
+    "a photo that is blurry, dark, or unidentifiable": "unidentifiable"
+}
+
 SYSTEM_PROMPT = """
 You are a retail outlet analyst specializing in Indian FMCG distribution. Your task is to analyze retail outlet images to identify and count specific cooling and branding assets.
 
-## Asset Categories to Identify
+## STAGE — Detailed Asset Analysis
+Analyze ALL images for specific refrigeration asset categories.
 
-1. **Visi Coolers (Vertical)**: These are vertical fridges with glass doors. Categorize as:
-   - `Single Door Visi Cooler`
-   - `Double Door Visi Cooler`
-   - `Slim/Counter-top Visi Cooler`
+### Asset Categories to Identify:
+1. Visi Coolers (Vertical glass door fridges)
+2. Chest Freezers (Horizontal units)
+3. Deep Freezers (Large horizontal units)
+4. Beverage Chillers (Open-front multidecks)
+5. Branded Counter-top Coolers
 
-2. **Chest Freezers (Horizontal)**: Horizontal units. Categorize as:
-   - `Sliding Glass Top Chest Freezer` (visible stock)
-   - `Hard Top Chest Freezer` (solid lid)
+### CRITICAL RULES:
+- ONLY rely on visual evidence from the provided images. 
+- IGNORE store names, metadata, or external data.
+- If an image is blurry or doesn't clearly show an asset, do NOT count it.
+- If there are no images, you cannot confirm anything.
+- Do NOT judge by name or ratings.
 
-3. **Deep Freezers**: Large, horizontal units typically used for back-stock.
-
-4. **Beverage Chillers**: Open-front vertical multidecks (no glass doors).
-
-5. **Branded Counter-top Coolers**: Compact units placed on billing counters.
-
-## Your Approach
-
-You MUST follow this exact two-stage workflow:
-
-### STAGE 1 — Outlet Type Classification & Initial Scan
-Examine the first 3–5 images. Classify the outlet as one of: supermarket, hypermarket, kirana / small retail, or uncertain.
-Identify the general category of the store (e.g., "High-Volume Modern Trade", "General Trade Kirana", "Premium Pharmacy").
-
-### STAGE 2 — Detailed Asset Analysis
-Analyze ALL images for the specific asset categories listed above.
-
-For each candidate detection, verify:
-- Can I see physical structure (door, handle, compressor, temperature display)?
-- Is this a real 3D object or a poster/sticker/banner?
-- Does it have realistic proportions for a cooling device?
-- Could it be a non-refrigerated glass cabinet or shelf?
-- Is my confidence above 70%?
-
-Only count detections that pass ALL verification checks.
-
-## Rules
-- Only rely on visual evidence from the provided images.
-- Ignore posters, stickers, reflections, and non-functional decommissioned units.
-- Use uniform naming conventions for all asset types.
-- Always show your reasoning in verification_notes.
-
-## Output Requirements (STRICT)
-Respond with ONLY a JSON object. Do NOT include any text outside the JSON.
-The JSON must follow this schema:
+## Output Requirements (STRICT JSON ONLY)
 {
   "contains_fridge": boolean,
   "outlet_type": "supermarket" | "hypermarket" | "kirana / small retail" | "uncertain",
-  "store_category": string, (STRICTLY the type of store predicted, e.g., "pharma store", "supermarket", "kirana store", "departmental store")
-  "asset_count": integer, (Total count of cooling/branding units)
-  "appliance_types": string, (STRICTLY a comma-separated list of EXACT asset categories found. Do NOT put store types here. Example: "visi cooler, chest freezer, beverage chiller")
-  "asset_breakdown": string, (Detailed count and type breakdown, e.g., "2 Double Door Visi Coolers, 1 Hard Top Chest Freezer")
+  "store_category": string, (predicted store type based ONLY on images)
+  "asset_count": integer,
+  "appliance_types": string, (comma-separated list of EXACT categories found)
+  "asset_breakdown": string,
   "confidence": "high" | "medium" | "low",
   "reason": string,
   "verification_notes": string
 }
 """
 
-class RRISEngine:
+class CLIPClassifier:
     def __init__(self, api_key):
+        self.api_key = api_key
+        self.headers = {"Authorization": f"Bearer {api_key}"}
+
+    async def classify_images(self, image_paths):
+        """
+        Inference call to Hugging Face CLIP model.
+        """
+        results = []
+        for path in image_paths:
+            try:
+                with open(path, "rb") as f:
+                    img_data = f.read()
+                
+                payload = {
+                    "inputs": base64.b64encode(img_data).decode("utf-8"),
+                    "parameters": {"candidate_labels": CLIP_OUTLET_LABELS}
+                }
+                
+                # HF Inference API usually expects raw bytes for image or JSON with inputs
+                # Using requests.post for simplicity, can be wrapped in loop.run_in_executor
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: requests.post(CLIP_API_URL, headers=self.headers, json=payload, timeout=10)
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, list) and len(data) > 0:
+                        # Top result
+                        top = data[0]
+                        results.append({
+                            "label": CLIP_LABEL_MAP.get(top["label"], "uncertain"),
+                            "score": top["score"]
+                        })
+                else:
+                    print(f"[CLIP] API Error: {response.text}")
+            except Exception as e:
+                print(f"[CLIP] Error processing {path}: {e}")
+        
+        return results
+
+class RRISEngine:
+    def __init__(self, api_key, clip_api_key=None):
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(config.get('model_name', 'gemini-2.5-flash'))
+        self.model = genai.GenerativeModel(config.get('model_name', 'gemini-2.0-flash'))
+        self.clip = CLIPClassifier(clip_api_key or api_key) # Use same key if HF not separate
 
     async def analyze_store(self, image_paths):
         """
-        Analyzes a set of images for a single store.
+        Analyzes a set of images using CLIP-first screening, then Gemini if needed.
         """
         if not image_paths:
             return {"error": "No images provided"}
 
+        # --- STAGE 1: CLIP SCREENING ---
+        # Look at first 3 images for a quick verdict
+        screen_images = image_paths[:3]
+        clip_results = await self.clip.classify_images(screen_images)
+        
+        is_supermarket = any(r['label'] == 'supermarket' and r['score'] > 0.4 for r in clip_results)
+        has_cooler = any(r['label'] == 'cooler_detected' and r['score'] > 0.3 for r in clip_results)
+        is_unidentifiable = all(r['label'] in ['unidentifiable', 'non-commercial'] or r['score'] < 0.2 for r in clip_results)
+
+        if is_unidentifiable and len(image_paths) < 1: # Basic check
+             return {
+                "contains_fridge": False,
+                "outlet_type": "uncertain",
+                "store_category": "N/A",
+                "asset_count": 0,
+                "appliance_types": "N/A",
+                "asset_breakdown": "None",
+                "confidence": "low",
+                "reason": "Images are unavailable, blurry or non-commercial.",
+                "verification_notes": "CLIP screening found no identifiable commercial outlet or assets."
+            }
+
+        # --- STAGE 2: GEMINI ANALYSIS (Only if CLIP suggests interest or for full validation) ---
+        # Even if not a supermarket, we might need Gemini to count fridges in a kirana
         parts = [SYSTEM_PROMPT]
         loaded_images = []
         
