@@ -33,7 +33,7 @@ async def run_audit(maps_url=None, place_id=None):
                 "verification_notes": "Scraper found 0 images."
             }
         else:
-            report_output = run_cov_audit(photo_urls)
+            report_output = await run_cov_audit(photo_urls)
             
         report_output["store_maps_url"] = maps_url
         report_output["place_id"] = place_id or details.get("place_id")

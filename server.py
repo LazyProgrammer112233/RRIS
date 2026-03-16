@@ -148,6 +148,9 @@ class AuditRequest(BaseModel):
 class BulkAuditRequest(BaseModel):
     place_ids: list[str]
 
+class GDriveAuditRequest(BaseModel):
+    folder_url: str
+
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
@@ -225,6 +228,51 @@ async def background_bulk_audit(task_id: str, place_ids: list):
 
     task_manager.update(task_id, "COMPLETED")
 
+async def background_gdrive_bulk_audit(task_id: str, folder_url: str):
+    """Run bulk audit on a Google Drive folder containing place_id.zip files."""
+    task_manager.update(task_id, "RUNNING")
+    from gdrive_handler import GDriveHandler, ZipProcessor
+    from vision_engine import run_cov_audit
+    
+    handler = GDriveHandler() # Using default creds/env for now
+    folder_id = handler.extract_folder_id(folder_url)
+    
+    try:
+        files = handler.list_zip_files(folder_id)
+        task_manager.update(task_id, "RUNNING", progress=0, total=len(files))
+        
+        for i, f in enumerate(files):
+            try:
+                place_id = f['name'].replace('.zip', '')
+                zip_bytes = handler.download_file(f['id'])
+                pil_images = ZipProcessor.get_images_from_zip(zip_bytes)
+                
+                # Run the revamped CLIP-first audit
+                audit = await run_cov_audit(pil_images=pil_images)
+                
+                item_result = {
+                    "place_id": place_id,
+                    "name": "N/A (GDrive Mode)",
+                    "outlet_type": audit.get("outlet_type", "N/A"),
+                    "supermarket_check": "YES" if audit.get("outlet_type") in ["supermarket", "hypermarket"] else "NO",
+                    "appliance_types": ", ".join(audit.get("appliance_types", [])) if isinstance(audit.get("appliance_types"), list) else audit.get("appliance_types", "N/A"),
+                    "location": "N/A (GDrive Mode)",
+                    "asset_count": audit.get("asset_count", 0),
+                    "verification_notes": audit.get("verification_notes", "N/A"),
+                    "lat": "N/A",
+                    "lng": "N/A",
+                    "rating": "N/A",
+                    "reviews": "N/A"
+                }
+                task_manager.update(task_id, "RUNNING", progress=i+1, bulk_item=item_result)
+            except Exception as e:
+                print(f"Error processing zip {f['name']}: {e}")
+                task_manager.update(task_id, "RUNNING", progress=i+1, bulk_item={"name": f['name'], "error": str(e)})
+
+        task_manager.update(task_id, "COMPLETED")
+    except Exception as e:
+        task_manager.update(task_id, "FAILED", {"error": str(e)})
+
 @app.post("/audit", response_model=dict)
 async def start_audit(request: AuditRequest, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4())
@@ -237,6 +285,13 @@ async def start_bulk_audit(request: BulkAuditRequest, background_tasks: Backgrou
     task_id = str(uuid.uuid4())
     task_manager.create(task_id, place_ids=request.place_ids)
     background_tasks.add_task(background_bulk_audit, task_id, request.place_ids)
+    return {"task_id": task_id, "status": "PENDING"}
+
+@app.post("/audit-gdrive")
+async def start_gdrive_audit(request: GDriveAuditRequest, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    task_manager.create(task_id, url=request.folder_url)
+    background_tasks.add_task(background_gdrive_bulk_audit, task_id, request.folder_url)
     return {"task_id": task_id, "status": "PENDING"}
 
 @app.get("/status/{task_id}")

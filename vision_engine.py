@@ -12,7 +12,63 @@ load_dotenv(".env.local") if os.path.exists(".env.local") else load_dotenv()
 
 # Configure Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-2.0-flash')
+
+# Hugging Face CLIP Configuration
+CLIP_API_URL = "https://router.huggingface.co/hf-inference/models/openai/clip-vit-base-patch32"
+VISION_MODEL_API_KEY = os.getenv("VISION_MODEL_API_KEY")
+
+CLIP_OFFLINE_LABELS = [
+    "a photo of a supermarket or hypermarket with many aisles",
+    "a photo of a small kirana store or traditional retail shop",
+    "a photo of a clear refrigeration cooling device (fridge/freezer)",
+    "a photo that is blurry, dark, or unidentifiable"
+]
+
+CLIP_LABEL_MAP = {
+    "a photo of a supermarket or hypermarket with many aisles": "supermarket",
+    "a photo of a small kirana store or traditional retail shop": "kirana",
+    "a photo of a clear refrigeration cooling device (fridge/freezer)": "cooler",
+    "a photo that is blurry, dark, or unidentifiable": "unidentifiable"
+}
+
+import base64
+
+async def classify_with_clip(image_pil):
+    """
+    Zero-shot classification via HF Inference API.
+    """
+    if not VISION_MODEL_API_KEY:
+        return None
+        
+    try:
+        # Convert PIL to base64
+        buffered = io.BytesIO()
+        image_pil.save(buffered, format="JPEG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        
+        payload = {
+            "inputs": img_str,
+            "parameters": {"candidate_labels": CLIP_OFFLINE_LABELS}
+        }
+        
+        headers = {"Authorization": f"Bearer {VISION_MODEL_API_KEY}"}
+        
+        # Async-friendly request
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.post(CLIP_API_URL, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if isinstance(data, list) and len(data) > 0:
+                        top = data[0]
+                        return {
+                            "label": CLIP_LABEL_MAP.get(top["label"], "uncertain"),
+                            "score": top["score"]
+                        }
+    except Exception as e:
+        print(f"[CLIP] Error: {e}")
+    return None
 
 def get_image_from_url(url):
     """Fetches an image from URL and returns a PIL Image object."""
@@ -26,25 +82,53 @@ def get_image_from_url(url):
 
 from prompts import SYSTEM_PROMPT
 
-def run_cov_audit(image_urls):
+async def run_cov_audit(image_urls=None, pil_images=None):
     """
-    Implements the two-stage CoV audit workflow.
-    Stage 1: Outlet Type Classification
-    Stage 2: Cooling Device Detection (if needed)
+    Implements the two-stage CoV audit workflow with CLIP-first screening.
     """
-    print(f"[Vision Engine] Starting CoV Audit on {len(image_urls)} images...")
+    print(f"[Vision Engine] Starting CoV Audit...")
     
-    # 1. Prepare images for Gemini
+    loaded_images = []
+    if pil_images:
+        loaded_images = pil_images[:10]
+    elif image_urls:
+        for url in image_urls[:10]:
+            try:
+                loaded_images.append(get_image_from_url(url))
+            except: continue
+
+    if not loaded_images:
+        return {"error": "No images available for analysis"}
+
+    # --- STAGE 1: CLIP SCREENING ---
+    # Screen first 3 images
+    clip_hits = []
+    for img in loaded_images[:3]:
+        res = await classify_with_clip(img)
+        if res: clip_hits.append(res)
+    
+    is_supermarket = any(h['label'] == 'supermarket' and h['score'] > 0.4 for h in clip_hits)
+    has_cooler = any(h['label'] == 'cooler' and h['score'] > 0.35 for h in clip_hits)
+    
+    # If it's highly likely to be non-commercial/unidentifiable, skip Gemini
+    if not is_supermarket and not has_cooler and len(clip_hits) > 0:
+        # Check if they are all very confident it's kirana/non-commercial without a cooler
+        if all(h['label'] in ['kirana', 'non-commercial', 'unidentifiable'] for h in clip_hits):
+             return {
+                "contains_fridge": False,
+                "detection_method": "clip_screening",
+                "outlet_type": clip_hits[0]['label'] if clip_hits else "kirana / small retail",
+                "reason": "CLIP pre-screening found no evidence of cooling devices or large-scale retail format.",
+                "confidence": "medium",
+                "verification_notes": f"CLIP matched: {', '.join([h['label'] for h in clip_hits])}. Analysis shortcut triggered to save credits."
+            }
+
+    # Prepare Gemini call
     parts = [SYSTEM_PROMPT]
-    for i, url in enumerate(image_urls[:10]): # Limit to first 10 for context window safety
-        try:
-            img = get_image_from_url(url)
-            parts.append(img)
-            parts.append(f"[This is image_{i+1}]")
-        except Exception as e:
-            print(f"[Vision Engine] Error loading image {url}: {e}")
-            continue
-            
+    for i, img in enumerate(loaded_images):
+        parts.append(img)
+        parts.append(f"[This is image_{i+1}]")
+
     parts.append("Now analyze these outlet images and return the JSON result.")
     
     # 2. Generate Content

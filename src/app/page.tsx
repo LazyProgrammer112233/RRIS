@@ -65,6 +65,22 @@ export default function RRISDashboard() {
     setStatusFeed(['Initializing RRIS Engine...']);
 
     try {
+      if (mapsUrl.includes("drive.google.com")) {
+        // Handle GDrive Bulk
+        setResult(null);
+        setStatus('PENDING');
+        setProgress({ current: 0, total: 0 });
+        const res = await fetch(`${API_URL}/audit-gdrive`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-RRIS-SECRET': APP_SECRET },
+          body: JSON.stringify({ folder_url: mapsUrl }),
+        });
+        const data = await res.json();
+        setTaskId(data.task_id);
+        addStatus('GDrive Batch Dispatched');
+        return;
+      }
+
       const isPlaceId = mapsUrl.startsWith('ChIJ');
       let finalUrl = mapsUrl;
       
@@ -177,7 +193,9 @@ export default function RRISDashboard() {
                   className="h-11 px-8 bg-gradient-to-tr from-purple-600 to-violet-500 text-white rounded-xl font-bold text-sm flex items-center gap-2 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all disabled:opacity-30 active:scale-95"
                 >
                   {isLoading ? <Loader2 className="animate-spin size-4" /> : <ArrowRight size={18} />}
-                  <span className="hidden sm:inline">Start Analysis</span>
+                  <span className="hidden sm:inline">
+                    {mapsUrl.includes("drive.google.com") ? "Launch Mega Bulk" : "Start Analysis"}
+                  </span>
                 </button>
               </div>
             </form>
