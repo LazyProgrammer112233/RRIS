@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Loader2, ArrowRight, Table, CheckCircle, Info, Database, Sparkles, Cpu, Layers, Download, Zap } from 'lucide-react';
+import { Search, Loader2, ArrowRight, Table, CheckCircle, Info, Database, Sparkles, Cpu, Layers, Download, Zap, FolderSearch } from 'lucide-react';
 import AuditDisplay from '@/components/AuditDisplay';
 import toast from 'react-hot-toast';
 
@@ -182,7 +182,7 @@ export default function RRISDashboard() {
                 </div>
                 <input
                   type="text"
-                  placeholder="Paste Place ID or Maps URL..."
+                  placeholder="Paste Place ID, Maps URL, or GDrive Folder Link..."
                   value={mapsUrl}
                   onChange={(e) => setMapsUrl(e.target.value)}
                   className="search-input flex-1 bg-transparent border-none px-4 py-3 text-base font-medium text-white placeholder:text-white/10 outline-none"
@@ -201,14 +201,27 @@ export default function RRISDashboard() {
             </form>
 
             {!result && !isLoading && (
-              <div className="flex justify-center">
+              <div className="flex justify-center gap-4">
                 <label className="cursor-pointer group">
                   <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
                   <div className="flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-sm font-bold text-white/60 group-hover:text-white group-hover:border-purple-500/50 transition-all">
                     <Table size={16} className="text-purple-500" />
-                    Upload Place ID CSV for Bulk Analysis
+                    CSV Bulk
                   </div>
                 </label>
+                <button 
+                  onClick={() => {
+                    const promptUrl = window.prompt("Paste Google Drive Folder Link:");
+                    if (promptUrl) {
+                      setMapsUrl(promptUrl);
+                      // Trigger analysis manually if needed or just let the button update
+                    }
+                  }}
+                  className="flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-sm font-bold text-white/60 hover:text-white hover:border-purple-500/50 transition-all"
+                >
+                  <FolderSearch size={16} className="text-purple-500" />
+                  GDrive Mega Bulk
+                </button>
               </div>
             )}
           </div>
