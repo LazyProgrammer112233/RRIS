@@ -55,7 +55,8 @@ async def get_place_details(place_id: str):
         return details.get("result", {})
     except Exception as e:
         print(f"[Scraper] Error fetching place details for {place_id}: {e}")
-        return {}
+        # Propagate the error message for better diagnostics
+        raise ValueError(f"Google Places API Error: {str(e)}")
 
 async def scrape_google_maps_photos(maps_url=None, place_id=None, max_photos=10):
     """
@@ -91,7 +92,11 @@ async def scrape_google_maps_photos(maps_url=None, place_id=None, max_photos=10)
 
     # 4. Fetch Place Details
     print(f"[Scraper] Fetching details for Place ID: {place_id}")
-    result = await get_place_details(place_id)
+    try:
+        result = await get_place_details(place_id)
+    except Exception as e:
+        print(f"[Scraper] get_place_details failed: {e}")
+        raise
     
     if not result:
          return [], {}
