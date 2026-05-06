@@ -1,5 +1,5 @@
 max_concurrent_requests: 15
 max_retries: 3
-model_name: "gemini-2.5-flash"
+model_name: "gemini-flash-latest"
 timeout_seconds: 60
 image_limit_per_store: 10

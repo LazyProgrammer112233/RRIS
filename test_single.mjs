@@ -1,8 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const apiKey = "AIzaSyBx68gIKkKoIbpM-YxhsUyvg6777B5_73I";
+const apiKey = "AIzaSyBdubDGvJTXEeBM5Sk30nLkYNueNQfejAo";
 const genAI = new GoogleGenerativeAI(apiKey);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
 // Test with a known retail store interior image
 const TEST_URL = "https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=800";

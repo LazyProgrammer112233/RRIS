@@ -8,7 +8,7 @@ const geminiKey = envKeyMatch ? envKeyMatch[1].trim() : '';
 const placesKey = envUrlMatch ? envUrlMatch[1].trim() : '';
 
 const genAI = new GoogleGenerativeAI(geminiKey);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
 const photoUrls = Array(10).fill("https://maps.googleapis.com/maps/api/place/photo?maxwidth=1024&photo_reference=Aap_uEDQ0wO90OQ1w2iM9E1fH11aF2XzO9M9H9E_&key=" + placesKey);
 

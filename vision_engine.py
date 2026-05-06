@@ -12,7 +12,7 @@ load_dotenv(".env.local") if os.path.exists(".env.local") else load_dotenv()
 
 # Configure Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-2.0-flash')
+model = genai.GenerativeModel('gemini-flash-latest')
 
 # Hugging Face CLIP Configuration
 CLIP_API_URL = "https://router.huggingface.co/hf-inference/models/openai/clip-vit-base-patch32"

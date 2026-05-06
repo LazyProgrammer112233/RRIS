@@ -32,7 +32,7 @@ console.log("CLIP_API_KEY:", CLIP_API_KEY ? "✓ Set" : "✗ MISSING");
 console.log("\n--- STAGE 1: Gemini Vision Detection ---");
 try {
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
     const imgResp = await fetch(TEST_IMAGE_URL);
     const imgBuf = Buffer.from(await imgResp.arrayBuffer());
