@@ -69,32 +69,34 @@ export default function RRISDashboard() {
     setStatusFeed(['Initializing RRIS Engine...']);
 
     try {
+      if (mapsUrl.includes("drive.google.com")) {
         // Handle GDrive Bulk
         setResult(null);
         setStatus('PENDING');
         setProgress({ current: 0, total: 0 });
         
         // 1. Create task
-        const { data: task, error: taskError } = await supabase
+        const { data: gdriveTask, error: gdriveError } = await supabase
           .from('audit_tasks')
           .insert([{ input_url: mapsUrl, status: 'PENDING' }])
           .select()
           .single();
-        if (taskError) throw taskError;
+        if (gdriveError) throw gdriveError;
 
-        setTaskId(task.id);
+        setTaskId(gdriveTask.id);
         addStatus('GDrive Batch Dispatched');
 
-        // 2. Trigger (Currently redirecting to audit function as placeholder for bulk)
+        // 2. Trigger
         fetch(`${SUPABASE_URL}/functions/v1/audit`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
           },
-          body: JSON.stringify({ maps_url: mapsUrl, task_id: task.id }),
+          body: JSON.stringify({ maps_url: mapsUrl, task_id: gdriveTask.id }),
         });
         return;
+      }
 
       const isPlaceId = mapsUrl.startsWith('ChIJ');
       let finalUrl = mapsUrl;
@@ -112,15 +114,15 @@ export default function RRISDashboard() {
       }
 
       // 1. Create task in Supabase
-      const { data: task, error: taskError } = await supabase
+      const { data: auditTask, error: auditError } = await supabase
         .from('audit_tasks')
         .insert([{ input_url: finalUrl, status: 'PENDING' }])
         .select()
         .single();
 
-      if (taskError) throw taskError;
+      if (auditError) throw auditError;
 
-      setTaskId(task.id);
+      setTaskId(auditTask.id);
       addStatus('Analysis Dispatched');
 
       // 2. Trigger Edge Function (fire and forget)
@@ -130,7 +132,7 @@ export default function RRISDashboard() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
         },
-        body: JSON.stringify({ maps_url: finalUrl, task_id: task.id }),
+        body: JSON.stringify({ maps_url: finalUrl, task_id: auditTask.id }),
       }).catch(err => console.error("Edge function trigger failed:", err));
 
     } catch (err) {
@@ -163,14 +165,14 @@ export default function RRISDashboard() {
 
       try {
         // 1. Create task
-        const { data: task, error: taskError } = await supabase
+        const { data: csvTask, error: csvError } = await supabase
           .from('audit_tasks')
           .insert([{ input_place_ids: placeIds, status: 'PENDING', total: placeIds.length }])
           .select()
           .single();
-        if (taskError) throw taskError;
+        if (csvError) throw csvError;
 
-        setTaskId(task.id);
+        setTaskId(csvTask.id);
 
         // 2. Trigger bulk audit (placeholder)
         fetch(`${SUPABASE_URL}/functions/v1/audit`, {
@@ -179,7 +181,7 @@ export default function RRISDashboard() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
           },
-          body: JSON.stringify({ place_ids: placeIds, task_id: task.id }),
+          body: JSON.stringify({ place_ids: placeIds, task_id: csvTask.id }),
         });
       } catch (err) {
         setIsLoading(false);
